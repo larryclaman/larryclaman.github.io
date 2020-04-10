@@ -1,0 +1,60 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=generator content="Hugo 0.68.3"><title>Querying for Azure Regional Pairs - Larry Claman's Blog</title><meta name=description content="Use the Azure CLI to programmatically query for an Azure Regions pair"><link rel=stylesheet href=/css/ui.css><link rel=stylesheet href="https://fonts.googleapis.com/css?family=Fira+Mono|Lato|Raleway"></head><body><header class="container no-print"><div class=u-header><nav class=bar><ul><li><a href=/><img class=icon-text src=/img/prev.svg></a></li><li><a href=/>Blog</a></li></ul></nav></div></header><main class=container><article><header><hgroup id=brand><h1>Querying for Azure Regional Pairs</h1><h5><time datetime="2020-04-09 18:16:04 -0400 -0400">Apr 09, 2020</time>
+<span class=no-print>-
+<a href=/tags/azure>azure</a>
+<span></h5></hgroup><hr class=sep></header><p>A teammate recently posted a quetion on our Team&rsquo;s channel, asking how to programmatically query to find out an Azure Region&rsquo;s pair. Easy I thought - except it turns out, this isn&rsquo;t exposed in the standard PowerShell commands, nor in the Azure CLI.</p><p>The PowerShell command <strong>Get-AzLocation</strong> only returns the Location, DisplayName, and Providers:</p><pre><code>PS C:\&gt; Get-AzLocation|ft
+
+Location           DisplayName          Providers
+--------           -----------          ---------
+eastasia           East Asia            {Microsoft.Media, Microsoft.HDInsight, Microsoft.SqlVirtualMachine, Microsoft.DevOps...}
+southeastasia      Southeast Asia       {Microsoft.Media, Microsoft.HDInsight, Microsoft.DataShare, Microsoft.SqlVirtualMachine...}
+centralus          Central US           {Microsoft.Media, Microsoft.HDInsight, Microsoft.SqlVirtualMachine, Microsoft.DevOps...}
+eastus             East US              {Microsoft.Media, Microsoft.HDInsight, Microsoft.DataShare, Microsoft.SqlVirtualMachine...}
+[snip]
+</code></pre><p>Meanwhile, the Azure CLI returns more info, but not the pair:</p><pre><code>PS C:\&gt; az account list-locations
+DisplayName           Latitude    Longitude    Name
+--------------------  ----------  -----------  ------------------
+East Asia             22.267      114.188      eastasia
+Southeast Asia        1.283       103.833      southeastasia
+Central US            41.5908     -93.6208     centralus
+East US               37.3719     -79.8164     eastus
+East US 2             36.6681     -78.3889     eastus2
+West US               37.783      -122.417     westus
+[snip]
+</code></pre><p>All hope is not lost! You can find the region&rsquo;s pair, but you need to query the Azure REST api directly, as documented at <a href=https://docs.microsoft.com/en-us/rest/api/resources/Subscriptions/ListLocations>https://docs.microsoft.com/en-us/rest/api/resources/Subscriptions/ListLocations</a>. In the past, you&rsquo;d need to fire up your favorite REST client (eg, <a href=https://github.com/projectkudu/ARMClient>armclient</a>, Vscode + <a href="https://marketplace.visualstudio.com/items?itemName=humao.rest-client">rest client extension</a>, Postman, etc), but in exploring this, I learned an easier way: You can now make Azure REST calls directly from the CLI! Here&rsquo;s what that looks like: <em>(Replace {yoursubid} with your specific subscription id)</em></p><pre><code>az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output json
+{
+  &quot;value&quot;: [
+    {
+      &quot;displayName&quot;: &quot;East US&quot;,
+      &quot;id&quot;: &quot;/subscriptions/{yoursubid}/locations/eastus&quot;,
+      &quot;metadata&quot;: {
+        &quot;geographyGroup&quot;: &quot;US&quot;,
+        &quot;latitude&quot;: &quot;37.3719&quot;,
+        &quot;longitude&quot;: &quot;-79.8164&quot;,
+        &quot;pairedRegion&quot;: [
+          {
+            &quot;id&quot;: &quot;/subscriptions/{yoursubid}/locations/westus&quot;,
+            &quot;name&quot;: &quot;westus&quot;
+          }
+        ],
+        &quot;physicalLocation&quot;: &quot;Virginia&quot;,
+        &quot;regionCategory&quot;: &quot;Recommended&quot;,
+        &quot;regionType&quot;: &quot;Physical&quot;
+      },
+      &quot;name&quot;: &quot;eastus&quot;,
+      &quot;regionalDisplayName&quot;: &quot;(US) East US&quot;
+    },
+[snip]
+</code></pre><p>What&rsquo;s really cool is you can use the CLI&rsquo;s built-in jmespath query engine to filter and massage the results, eg: <em>(Column1 is the region, and Column2 is the pair)</em></p><pre><code>az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output table --query 'value[].[name,metadata.pairedRegion[].name]'
+
+Column1              Column2
+-------------------  ----------------------
+eastus               ['westus']
+eastus2              ['centralus']
+southcentralus       ['northcentralus']
+westus2              ['westcentralus']
+australiaeast        ['australiasoutheast']
+[snip]
+</code></pre><p>(I&rsquo;m still working on my jmespath ninja skills, so there&rsquo;s still a little cleanup to be done on this table, but it gets the point across.)</p></article><nav class="no-print post-nav"><a class=prev-post href=https://larryclaman.github.io/post/2019-11-10-trigger-docker-build-azdo/><img class=icon-text src=/img/prev.svg>Trigger Azure DevOps Build pipeline from Docker image update</a></nav><div id=disqus_thread class=no-print></div><script type=text/javascript>(function(){if(window.location.hostname=="localhost")
+return;var dsq=document.createElement('script');dsq.type='text/javascript';dsq.async=true;var disqus_shortname='larryclamanblog';dsq.src='//'+disqus_shortname+'.disqus.com/embed.js';(document.getElementsByTagName('head')[0]||document.getElementsByTagName('body')[0]).appendChild(dsq);})();</script><noscript>Please enable JavaScript to view the <a href=http://disqus.com/?ref_noscript>comments powered by Disqus.</a></noscript><hr class=sep></main><footer class="container no-print"><div class=u-footer><a href=https://github.com/larryclaman/><img class=icon-social src=/img/github.svg alt=Github></a>
+<a href=https://larryclaman.github.io/index.xml target=_blank><img class=icon-social src=/img/feed.svg alt=Feed></a><p></p><a href=#brand><img class=icon-text src=/img/toup.svg alt="To Up">
+<span>Back to Top</span></a></div></footer><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-152688163-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></body></html>
