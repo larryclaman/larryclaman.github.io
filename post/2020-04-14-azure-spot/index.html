@@ -1,0 +1,79 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=generator content="Hugo 0.69.0"><title>Converting an Azure VM to a Spot type - Larry Claman's Blog</title><meta name=description content="Convert an Azure VM to a Spot type using a PowerShell script"><link rel=stylesheet href=/css/ui.css><link rel=stylesheet href="https://fonts.googleapis.com/css?family=Fira+Mono|Lato|Raleway"></head><body><header class="container no-print"><div class=u-header><nav class=bar><ul><li><a href=/><img class=icon-text src=/img/prev.svg></a></li><li><a href=/>Blog</a></li></ul></nav></div></header><main class=container><article><header><hgroup id=brand><h1>Converting an Azure VM to a Spot type</h1><h5><time datetime="2020-04-14 20:16:12 -0400 -0400">Apr 14, 2020</time>
+<span class=no-print>-
+<a href=/tags/azure>azure</a>
+<span></h5></hgroup><hr class=sep></header><p>The Azure team recently announced support for <a href=https://azure.microsoft.com/en-us/blog/announcing-the-preview-of-azure-spot-virtual-machines/>Spot Virtual Machines</a>. In case you&rsquo;re not familiar, <em>&ldquo;Azure Spot Virtual Machines provide access to unused Azure compute capacity at deep discounts."</em> The tradeoff is, a Spot VM can be evicted at any time.</p><p>Currently, there&rsquo;s no way to dynamically change an existing VM type to become a Spot. However, using PowerShell, you can perform some &lsquo;magic&rsquo; to reprovision an existing VM as a new Spot instance.</p><p>Here&rsquo;s the script I put together: (you can download it from my GitHub gist)</p><div class=highlight><pre class=chroma><code class=language-powershell data-lang=powershell><span class=cm>&lt;# Convert a VM to a Spot VM
+</span><span class=cm>Based on sample script at https://docs.microsoft.com/en-us/azure/virtual-machines/windows/change-availability-set
+</span><span class=cm>NOTE:  Extensions will not be copied to new instance!!
+</span><span class=cm>#&gt;</span>
+
+<span class=c># Set variables to your specifics</span>
+<span class=nv>$resourceGroup</span> <span class=p>=</span> <span class=s2>&#34;myRG&#34;</span>
+<span class=nv>$vmName</span> <span class=p>=</span> <span class=s2>&#34;myVM&#34;</span>
+
+<span class=c># Get the details of the VM to be moved to the Availability Set</span>
+<span class=nv>$originalVM</span> <span class=p>=</span> <span class=nb>Get-AzVM</span> <span class=p>`</span>
+       <span class=n>-ResourceGroupName</span> <span class=nv>$resourceGroup</span> <span class=p>`</span>
+       <span class=n>-Name</span> <span class=nv>$vmName</span>
+ 
+<span class=c># Create the basic configuration for the replacement VM. </span>
+<span class=nv>$newVM</span> <span class=p>=</span> <span class=nb>New-AzVMConfig</span> <span class=p>`</span>
+       <span class=n>-VMName</span> <span class=nv>$originalVM</span><span class=p>.</span><span class=n>Name</span> <span class=p>`</span>
+       <span class=n>-VMSize</span> <span class=nv>$originalVM</span><span class=p>.</span><span class=n>HardwareProfile</span><span class=p>.</span><span class=n>VmSize</span> <span class=p>`</span>
+       <span class=n>-Priority</span> <span class=s2>&#34;Spot&#34;</span> <span class=n>-MaxPrice</span> <span class=p>-</span><span class=n>1</span>
+
+<span class=c># Confgure OS Disk</span>
+<span class=nb>Set-AzVMOSDisk</span> <span class=p>`</span>
+       <span class=n>-VM</span> <span class=nv>$newVM</span> <span class=n>-CreateOption</span> <span class=n>Attach</span> <span class=p>`</span>
+       <span class=n>-ManagedDiskId</span> <span class=nv>$originalVM</span><span class=p>.</span><span class=n>StorageProfile</span><span class=p>.</span><span class=n>OsDisk</span><span class=p>.</span><span class=n>ManagedDisk</span><span class=p>.</span><span class=n>Id</span> <span class=p>`</span>
+       <span class=n>-Name</span> <span class=nv>$originalVM</span><span class=p>.</span><span class=n>StorageProfile</span><span class=p>.</span><span class=n>OsDisk</span><span class=p>.</span><span class=n>Name</span> 
+
+<span class=k>if</span> <span class=p>(</span><span class=nv>$originalVM</span><span class=p>.</span><span class=n>OSProfile</span><span class=p>.</span><span class=n>WindowsConfiguration</span><span class=p>)</span> <span class=p>{</span>
+    <span class=nv>$newVM</span><span class=p>.</span><span class=n>StorageProfile</span><span class=p>.</span><span class=n>OsDisk</span><span class=p>.</span><span class=n>OsType</span><span class=p>=</span><span class=s2>&#34;Windows&#34;</span> 
+    <span class=p>}</span> <span class=k>else</span> <span class=p>{</span>
+    <span class=nv>$newVM</span><span class=p>.</span><span class=n>StorageProfile</span><span class=p>.</span><span class=n>OsDisk</span><span class=p>.</span><span class=n>OsType</span><span class=p>=</span><span class=s2>&#34;Linux&#34;</span>
+    <span class=p>}</span>  
+
+<span class=c># Add Data Disks</span>
+<span class=k>foreach</span> <span class=p>(</span><span class=nv>$disk</span> <span class=k>in</span> <span class=nv>$originalVM</span><span class=p>.</span><span class=n>StorageProfile</span><span class=p>.</span><span class=n>DataDisks</span><span class=p>)</span> <span class=p>{</span> 
+    <span class=nb>Add-AzVMDataDisk</span> <span class=n>-VM</span> <span class=nv>$newVM</span> <span class=p>`</span>
+       <span class=n>-Name</span> <span class=nv>$disk</span><span class=p>.</span><span class=n>Name</span> <span class=p>`</span>
+       <span class=n>-ManagedDiskId</span> <span class=nv>$disk</span><span class=p>.</span><span class=n>ManagedDisk</span><span class=p>.</span><span class=n>Id</span> <span class=p>`</span>
+       <span class=n>-Caching</span> <span class=nv>$disk</span><span class=p>.</span><span class=n>Caching</span> <span class=p>`</span>
+       <span class=n>-Lun</span> <span class=nv>$disk</span><span class=p>.</span><span class=n>Lun</span> <span class=p>`</span>
+       <span class=n>-DiskSizeInGB</span> <span class=nv>$disk</span><span class=p>.</span><span class=n>DiskSizeGB</span> <span class=p>`</span>
+       <span class=n>-CreateOption</span> <span class=n>Attach</span>
+    <span class=p>}</span>
+    
+<span class=c># Add NIC(s) and keep the same NIC as primary</span>
+<span class=k>foreach</span> <span class=p>(</span><span class=nv>$nic</span> <span class=k>in</span> <span class=nv>$originalVM</span><span class=p>.</span><span class=n>NetworkProfile</span><span class=p>.</span><span class=n>NetworkInterfaces</span><span class=p>)</span> <span class=p>{</span>    
+    <span class=k>if</span> <span class=p>(</span><span class=nv>$nic</span><span class=p>.</span><span class=n>Primary</span> <span class=o>-eq</span> <span class=s2>&#34;True&#34;</span><span class=p>)</span>
+        <span class=p>{</span>
+            <span class=nb>Add-AzVMNetworkInterface</span> <span class=p>`</span>
+               <span class=n>-VM</span> <span class=nv>$newVM</span> <span class=p>`</span>
+               <span class=n>-Id</span> <span class=nv>$nic</span><span class=p>.</span><span class=n>Id</span> <span class=n>-Primary</span>
+               <span class=p>}</span>
+           <span class=k>else</span>
+               <span class=p>{</span>
+                 <span class=nb>Add-AzVMNetworkInterface</span> <span class=p>`</span>
+                <span class=n>-VM</span> <span class=nv>$newVM</span> <span class=p>`</span>
+                 <span class=n>-Id</span> <span class=nv>$nic</span><span class=p>.</span><span class=n>Id</span> 
+                <span class=p>}</span>
+      <span class=p>}</span>
+
+<span class=k>if</span> <span class=p>(</span><span class=nv>$originalVM</span><span class=p>.</span><span class=n>AvailabilitySetReference</span><span class=p>.</span><span class=n>Id</span><span class=p>)</span> <span class=p>{</span>
+    <span class=nb>echo </span><span class=s2>&#34;Warning: VM $originalVM.Name is in an availability set.  Spot VMs cannot run in availability sets.&#34;</span>
+    <span class=p>}</span>
+
+<span class=c># Remove the original VM</span>
+<span class=nb>Remove-AzVM</span> <span class=n>-ResourceGroupName</span> <span class=nv>$resourceGroup</span> <span class=n>-Name</span> <span class=nv>$vmName</span>   
+
+<span class=c># Recreate the VM</span>
+<span class=nb>New-AzVM</span> <span class=p>`</span>
+       <span class=n>-ResourceGroupName</span> <span class=nv>$resourceGroup</span> <span class=p>`</span>
+       <span class=n>-Location</span> <span class=nv>$originalVM</span><span class=p>.</span><span class=n>Location</span> <span class=p>`</span>
+       <span class=n>-VM</span> <span class=nv>$newVM</span> <span class=p>`</span>
+       <span class=n>-DisableBginfoExtension</span>
+</code></pre></div></article><nav class="no-print post-nav"><a class=prev-post href=https://larryclaman.github.io/post/2020-04-09-querying-for-azure-regional-pairs/><img class=icon-text src=/img/prev.svg>Querying for Azure Regional Pairs</a></nav><section id=related><h4>See Also</h4><ul><li><a href=/post/2020-04-09-querying-for-azure-regional-pairs/>Querying for Azure Regional Pairs</a></li></ul></section><div id=disqus_thread class=no-print></div><script type=text/javascript>(function(){if(window.location.hostname=="localhost")
+return;var dsq=document.createElement('script');dsq.type='text/javascript';dsq.async=true;var disqus_shortname='larryclamanblog';dsq.src='//'+disqus_shortname+'.disqus.com/embed.js';(document.getElementsByTagName('head')[0]||document.getElementsByTagName('body')[0]).appendChild(dsq);})();</script><noscript>Please enable JavaScript to view the <a href=http://disqus.com/?ref_noscript>comments powered by Disqus.</a></noscript><hr class=sep></main><footer class="container no-print"><div class=u-footer><a href=https://github.com/larryclaman/><img class=icon-social src=/img/github.svg alt=Github></a>
+<a href=https://larryclaman.github.io/index.xml target=_blank><img class=icon-social src=/img/feed.svg alt=Feed></a><p></p><a href=#brand><img class=icon-text src=/img/toup.svg alt="To Up">
+<span>Back to Top</span></a></div></footer><script type=application/javascript>var doNotTrack=false;if(!doNotTrack){window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;ga('create','UA-152688163-1','auto');ga('send','pageview');}</script><script async src=https://www.google-analytics.com/analytics.js></script></body></html>
