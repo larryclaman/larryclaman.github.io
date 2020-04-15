@@ -1,1 +1,178 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Larry Claman's Blog</title><link>https://larryclaman.github.io/</link><description>Recent content on Larry Claman's Blog</description><generator>Hugo -- gohugo.io</generator><language>en</language><lastBuildDate>Tue, 14 Apr 2020 20:16:12 -0400</lastBuildDate><atom:link href="https://larryclaman.github.io/index.xml" rel="self" type="application/rss+xml"/><item><title>Converting an Azure VM to a Spot type</title><link>https://larryclaman.github.io/post/2020-04-14-azure-spot/</link><pubDate>Tue, 14 Apr 2020 20:16:12 -0400</pubDate><guid>https://larryclaman.github.io/post/2020-04-14-azure-spot/</guid><description>Convert an Azure VM to a Spot type using a PowerShell script</description></item><item><title>Querying for Azure Regional Pairs</title><link>https://larryclaman.github.io/post/2020-04-09-querying-for-azure-regional-pairs/</link><pubDate>Thu, 09 Apr 2020 18:16:04 -0400</pubDate><guid>https://larryclaman.github.io/post/2020-04-09-querying-for-azure-regional-pairs/</guid><description>Use the Azure CLI to programmatically query for an Azure Regions pair</description></item><item><title>Trigger Azure DevOps Build pipeline from Docker image update</title><link>https://larryclaman.github.io/post/2019-11-10-trigger-docker-build-azdo/</link><pubDate>Sun, 10 Nov 2019 21:42:45 -0500</pubDate><guid>https://larryclaman.github.io/post/2019-11-10-trigger-docker-build-azdo/</guid><description>Use ACR and Logic Apps to trigger an AzDo pipeline when a Docker base-image is updated</description></item></channel></rss>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Larry Claman's Blog</title><link>https://larryclaman.github.io/</link><description>Recent content on Larry Claman's Blog</description><generator>Hugo -- gohugo.io</generator><language>en</language><lastBuildDate>Tue, 14 Apr 2020 20:16:12 -0400</lastBuildDate><atom:link href="https://larryclaman.github.io/index.xml" rel="self" type="application/rss+xml"/><item><title>Converting an Azure VM to a Spot type</title><link>https://larryclaman.github.io/post/2020-04-14-azure-spot/</link><pubDate>Tue, 14 Apr 2020 20:16:12 -0400</pubDate><guid>https://larryclaman.github.io/post/2020-04-14-azure-spot/</guid><description>&lt;p>The Azure team recently announced support for &lt;a href="https://azure.microsoft.com/en-us/blog/announcing-the-preview-of-azure-spot-virtual-machines/">Spot Virtual Machines&lt;/a>. In case you&amp;rsquo;re not familiar, &lt;em>&amp;ldquo;Azure Spot Virtual Machines provide access to unused Azure compute capacity at deep discounts.&amp;quot;&lt;/em> The tradeoff is, a Spot VM can be evicted at any time.&lt;/p>
+&lt;p>Currently, there&amp;rsquo;s no way to dynamically change an existing VM type to become a Spot. However, using PowerShell, you can perform some &amp;lsquo;magic&amp;rsquo; to reprovision an existing VM as a new Spot instance.&lt;/p>
+&lt;p>Here&amp;rsquo;s the script I put together:&lt;/p>
+&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-powershell" data-lang="powershell">&lt;span class="cm">&amp;lt;# Convert a VM to a Spot VM
+&lt;/span>&lt;span class="cm">Based on sample script at https://docs.microsoft.com/en-us/azure/virtual-machines/windows/change-availability-set
+&lt;/span>&lt;span class="cm">NOTE: Extensions will not be copied to new instance!!
+&lt;/span>&lt;span class="cm">#&amp;gt;&lt;/span>
+&lt;span class="c"># Set variables to your specifics&lt;/span>
+&lt;span class="nv">$resourceGroup&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="s2">&amp;#34;myRG&amp;#34;&lt;/span>
+&lt;span class="nv">$vmName&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="s2">&amp;#34;myVM&amp;#34;&lt;/span>
+&lt;span class="c"># Get the details of the VM to be moved to the Availability Set&lt;/span>
+&lt;span class="nv">$originalVM&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="nb">Get-AzVM&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-ResourceGroupName&lt;/span> &lt;span class="nv">$resourceGroup&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-Name&lt;/span> &lt;span class="nv">$vmName&lt;/span>
+&lt;span class="c"># Create the basic configuration for the replacement VM. &lt;/span>
+&lt;span class="nv">$newVM&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="nb">New-AzVMConfig&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-VMName&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Name&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-VMSize&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">HardwareProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">VmSize&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-Priority&lt;/span> &lt;span class="s2">&amp;#34;Spot&amp;#34;&lt;/span> &lt;span class="n">-MaxPrice&lt;/span> &lt;span class="p">-&lt;/span>&lt;span class="n">1&lt;/span>
+&lt;span class="c"># Confgure OS Disk&lt;/span>
+&lt;span class="nb">Set-AzVMOSDisk&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-VM&lt;/span> &lt;span class="nv">$newVM&lt;/span> &lt;span class="n">-CreateOption&lt;/span> &lt;span class="n">Attach&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-ManagedDiskId&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">StorageProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OsDisk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">ManagedDisk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Id&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-Name&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">StorageProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OsDisk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Name&lt;/span>
+&lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OSProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">WindowsConfiguration&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nv">$newVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">StorageProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OsDisk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OsType&lt;/span>&lt;span class="p">=&lt;/span>&lt;span class="s2">&amp;#34;Windows&amp;#34;&lt;/span>
+&lt;span class="p">}&lt;/span> &lt;span class="k">else&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nv">$newVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">StorageProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OsDisk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OsType&lt;/span>&lt;span class="p">=&lt;/span>&lt;span class="s2">&amp;#34;Linux&amp;#34;&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="c"># Add Data Disks&lt;/span>
+&lt;span class="k">foreach&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nv">$disk&lt;/span> &lt;span class="k">in&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">StorageProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">DataDisks&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nb">Add-AzVMDataDisk&lt;/span> &lt;span class="n">-VM&lt;/span> &lt;span class="nv">$newVM&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-Name&lt;/span> &lt;span class="nv">$disk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Name&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-ManagedDiskId&lt;/span> &lt;span class="nv">$disk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">ManagedDisk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Id&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-Caching&lt;/span> &lt;span class="nv">$disk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Caching&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-Lun&lt;/span> &lt;span class="nv">$disk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Lun&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-DiskSizeInGB&lt;/span> &lt;span class="nv">$disk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">DiskSizeGB&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-CreateOption&lt;/span> &lt;span class="n">Attach&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="c"># Add NIC(s) and keep the same NIC as primary&lt;/span>
+&lt;span class="k">foreach&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nv">$nic&lt;/span> &lt;span class="k">in&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">NetworkProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">NetworkInterfaces&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nv">$nic&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Primary&lt;/span> &lt;span class="o">-eq&lt;/span> &lt;span class="s2">&amp;#34;True&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
+&lt;span class="p">{&lt;/span>
+&lt;span class="nb">Add-AzVMNetworkInterface&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-VM&lt;/span> &lt;span class="nv">$newVM&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-Id&lt;/span> &lt;span class="nv">$nic&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Id&lt;/span> &lt;span class="n">-Primary&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="k">else&lt;/span>
+&lt;span class="p">{&lt;/span>
+&lt;span class="nb">Add-AzVMNetworkInterface&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-VM&lt;/span> &lt;span class="nv">$newVM&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-Id&lt;/span> &lt;span class="nv">$nic&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Id&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">AvailabilitySetReference&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Id&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
+&lt;span class="nb">echo &lt;/span>&lt;span class="s2">&amp;#34;Warning: VM $originalVM.Name is in an availability set. Spot VMs cannot run in availability sets.&amp;#34;&lt;/span>
+&lt;span class="p">}&lt;/span>
+&lt;span class="c"># Remove the original VM&lt;/span>
+&lt;span class="nb">Remove-AzVM&lt;/span> &lt;span class="n">-ResourceGroupName&lt;/span> &lt;span class="nv">$resourceGroup&lt;/span> &lt;span class="n">-Name&lt;/span> &lt;span class="nv">$vmName&lt;/span>
+&lt;span class="c"># Recreate the VM&lt;/span>
+&lt;span class="nb">New-AzVM&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-ResourceGroupName&lt;/span> &lt;span class="nv">$resourceGroup&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-Location&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Location&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-VM&lt;/span> &lt;span class="nv">$newVM&lt;/span> &lt;span class="p">`&lt;/span>
+&lt;span class="n">-DisableBginfoExtension&lt;/span>
+&lt;/code>&lt;/pre>&lt;/div></description></item><item><title>Querying for Azure Regional Pairs</title><link>https://larryclaman.github.io/post/2020-04-09-querying-for-azure-regional-pairs/</link><pubDate>Thu, 09 Apr 2020 18:16:04 -0400</pubDate><guid>https://larryclaman.github.io/post/2020-04-09-querying-for-azure-regional-pairs/</guid><description>&lt;p>A teammate recently posted a question on our Team&amp;rsquo;s channel, asking how to programmatically query to find out an Azure Region&amp;rsquo;s pair. Easy I thought - except it turns out, this isn&amp;rsquo;t exposed in the standard PowerShell commands, nor in the Azure CLI.&lt;/p>
+&lt;p>The PowerShell command &lt;strong>Get-AzLocation&lt;/strong> only returns the Location, DisplayName, and Providers:&lt;/p>
+&lt;pre>&lt;code>PS C:\&amp;gt; Get-AzLocation|ft
+Location DisplayName Providers
+-------- ----------- ---------
+eastasia East Asia {Microsoft.Media, Microsoft.HDInsight, Microsoft.SqlVirtualMachine, Microsoft.DevOps...}
+southeastasia Southeast Asia {Microsoft.Media, Microsoft.HDInsight, Microsoft.DataShare, Microsoft.SqlVirtualMachine...}
+centralus Central US {Microsoft.Media, Microsoft.HDInsight, Microsoft.SqlVirtualMachine, Microsoft.DevOps...}
+eastus East US {Microsoft.Media, Microsoft.HDInsight, Microsoft.DataShare, Microsoft.SqlVirtualMachine...}
+[snip]
+&lt;/code>&lt;/pre>&lt;p>Meanwhile, the Azure CLI returns more info, but not the pair:&lt;/p>
+&lt;pre>&lt;code>PS C:\&amp;gt; az account list-locations
+DisplayName Latitude Longitude Name
+-------------------- ---------- ----------- ------------------
+East Asia 22.267 114.188 eastasia
+Southeast Asia 1.283 103.833 southeastasia
+Central US 41.5908 -93.6208 centralus
+East US 37.3719 -79.8164 eastus
+East US 2 36.6681 -78.3889 eastus2
+West US 37.783 -122.417 westus
+[snip]
+&lt;/code>&lt;/pre>&lt;p>All hope is not lost! You can find the region&amp;rsquo;s pair, but you need to query the Azure REST api directly, as documented at &lt;a href="https://docs.microsoft.com/en-us/rest/api/resources/Subscriptions/ListLocations">https://docs.microsoft.com/en-us/rest/api/resources/Subscriptions/ListLocations&lt;/a>. In the past, you&amp;rsquo;d need to fire up your favorite REST client (eg, &lt;a href="https://github.com/projectkudu/ARMClient">armclient&lt;/a>, Vscode + &lt;a href="https://marketplace.visualstudio.com/items?itemName=humao.rest-client">rest client extension&lt;/a>, Postman, etc), but in exploring this, I learned an easier way: You can now make Azure REST calls directly from the CLI! Here&amp;rsquo;s what that looks like: &lt;em>(Replace {yoursubid} with your specific subscription id)&lt;/em>&lt;/p>
+&lt;pre>&lt;code>az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output json
+{
+&amp;quot;value&amp;quot;: [
+{
+&amp;quot;displayName&amp;quot;: &amp;quot;East US&amp;quot;,
+&amp;quot;id&amp;quot;: &amp;quot;/subscriptions/{yoursubid}/locations/eastus&amp;quot;,
+&amp;quot;metadata&amp;quot;: {
+&amp;quot;geographyGroup&amp;quot;: &amp;quot;US&amp;quot;,
+&amp;quot;latitude&amp;quot;: &amp;quot;37.3719&amp;quot;,
+&amp;quot;longitude&amp;quot;: &amp;quot;-79.8164&amp;quot;,
+&amp;quot;pairedRegion&amp;quot;: [
+{
+&amp;quot;id&amp;quot;: &amp;quot;/subscriptions/{yoursubid}/locations/westus&amp;quot;,
+&amp;quot;name&amp;quot;: &amp;quot;westus&amp;quot;
+}
+],
+&amp;quot;physicalLocation&amp;quot;: &amp;quot;Virginia&amp;quot;,
+&amp;quot;regionCategory&amp;quot;: &amp;quot;Recommended&amp;quot;,
+&amp;quot;regionType&amp;quot;: &amp;quot;Physical&amp;quot;
+},
+&amp;quot;name&amp;quot;: &amp;quot;eastus&amp;quot;,
+&amp;quot;regionalDisplayName&amp;quot;: &amp;quot;(US) East US&amp;quot;
+},
+[snip]
+&lt;/code>&lt;/pre>&lt;p>What&amp;rsquo;s really cool is you can use the CLI&amp;rsquo;s built-in jmespath query engine to filter and massage the results, eg: &lt;em>(Column1 is the region, and Column2 is the pair)&lt;/em>&lt;/p>
+&lt;pre>&lt;code>az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output table --query 'value[].[name,metadata.pairedRegion[].name]'
+Column1 Column2
+------------------- ----------------------
+eastus ['westus']
+eastus2 ['centralus']
+southcentralus ['northcentralus']
+westus2 ['westcentralus']
+australiaeast ['australiasoutheast']
+[snip]
+&lt;/code>&lt;/pre>&lt;p>(I&amp;rsquo;m still working on my jmespath ninja skills, so there&amp;rsquo;s still a little cleanup to be done on this table, but it gets the point across.)&lt;/p></description></item><item><title>Trigger Azure DevOps Build pipeline from Docker image update</title><link>https://larryclaman.github.io/post/2019-11-10-trigger-docker-build-azdo/</link><pubDate>Sun, 10 Nov 2019 21:42:45 -0500</pubDate><guid>https://larryclaman.github.io/post/2019-11-10-trigger-docker-build-azdo/</guid><description>&lt;p>&lt;em>This is the first in a series of posts about automating Docker image builds.&lt;/em>&lt;/p>
+&lt;h2 id="how-to-trigger-a-build">How to trigger a build?&lt;/h2>
+&lt;p>I was recently asked how to trigger a classic (gui) Azure DevOps build pipeline when a Docker base image updates. You might want to do this, for example, if your build pipeline includes unit, functional, or security tests.&lt;/p>
+&lt;p>My immediate answer was &amp;ldquo;you can&amp;rsquo;t.&amp;rdquo; However, after a little investigation and a little hacking, I was able to prototype a solution using the &lt;a href="https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-base-image-update">automated trigger &amp;amp; build feature&lt;/a> of Azure Container Registry (ACR). The hint for how to do this was buried in the &lt;a href="https://github.com/MicrosoftDocs/azure-docs/issues/34480">Q&amp;amp;A&lt;/a> on documentation page, where it&amp;rsquo;s suggested to use a dummy image to trigger the AzDo pipeline. Here&amp;rsquo;s a walkthrough of how I did this:&lt;/p>
+&lt;h2 id="sample-repo--pipeline">Sample Repo &amp;amp; Pipeline&lt;/h2>
+&lt;p>As a sample repo, I used the canonical &lt;a href="https://dev.azure.com/larrydevopstest/_git/AzureVotingApp">Azure voting app&lt;/a>, but I simplified it a bit to suit my needs. My Dockerfile is pretty simple; my goal is for the build pipeline to run whenever the base python:3.6-slim image is updated on Dockerhub.&lt;/p>
+&lt;pre>&lt;code>FROM python:3.6-slim
+RUN pip install redis
+RUN pip install flask
+ADD /azure-vote /app
+CMD [ &amp;quot;python&amp;quot;, &amp;quot;/app/main.py&amp;quot; ]
+&lt;/code>&lt;/pre>&lt;h3 id="step-1--create-a-dummy-base-image-and-task-in-acr">Step 1: Create a dummy base image and task in ACR&lt;/h3>
+&lt;p>As I mentioned above, I&amp;rsquo;m going to build a dummy base image using ACR, and then use a webhook when this image updates to trigger my Azure DevOps pipeline.&lt;/p>
+&lt;p>First, I&amp;rsquo;ll need to follow the instructions &lt;a href="https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-base-image-update">here&lt;/a> to create a dummy base image and a task to update it when its reference base updates on Dockerhub.&lt;/p>
+&lt;p>To start, build the base image in ACR:&lt;/p>
+&lt;pre>&lt;code>ACR_NAME=larrymsvoting
+REPO=&amp;quot;https://larrydevopstest@dev.azure.com/larrydevopstest/AzureVotingApp/_git/AzureVotingApp&amp;quot;
+DOCKER_FILE=&amp;quot;azure-vote/Dockerfile-pythonbase&amp;quot;
+az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
+--file $DOCKER_FILE $REPO
+&lt;/code>&lt;/pre>&lt;h3 id="step-2-create-a-task">Step 2: Create a task&lt;/h3>
+&lt;pre>&lt;code>az acr task create \
+--registry $ACR_NAME \
+--name taskpythonbase \
+-t baseimages/python-3.6-slim-base:{{.Run.ID}} \
+--arg REGISTRY_NAME=$ACR_NAME.azurecr.io \
+--context $REPO \
+--file Dockerfile-pythonbase \
+--commit-trigger-enabled false \
+-o table
+&lt;/code>&lt;/pre>&lt;p>Assuming it runs successfully, you&amp;rsquo;ll see output like:&lt;/p>
+&lt;pre>&lt;code>NAME PLATFORM STATUS SOURCE REPOSITORY TRIGGERS
+-------------- ---------- -------- ---------------------------------------------------------------------------------------- ----------
+taskpythonbase linux Enabled https://larrydevopstest@dev.azure.com/larrydevopstest/AzureVotingApp/_git/AzureVotingApp BASE_IMAGE
+&lt;/code>&lt;/pre>&lt;h3 id="step-3-logic-app">Step 3: Logic App&lt;/h3>
+&lt;p>Now comes the fun part: getting the base image update to trigger a build in Azure DevOps. We&amp;rsquo;ll start by creating a logic app.
+In the portal, create a logic app and give it a relevant name, eg &amp;lsquo;pythonbasetrigger&amp;rsquo;. In the Logic Apps Designer pane, use &amp;ldquo;When an HTTP Request is Received&amp;rdquo; as the trigger.&lt;/p>
+&lt;p>Add a new step, then type &amp;lsquo;Azure DevOps&amp;rsquo; in the search field, then choose &amp;lsquo;Queue a new build&amp;rsquo; as the action. After authenticating, choose the account name, project name, and build id (eg, pipleline). Once it&amp;rsquo;s saved, it should like like:
+&lt;img src="logicapp.png" alt="logic app">&lt;/p>
+&lt;p>You can test the logic app by pressing &amp;lsquo;Run&amp;rsquo;, which should kick off an Azure DevOps pipeline build.&lt;/p>
+&lt;p>Finally, in your logic apps&amp;rsquo;s first step &amp;lsquo;When an HTTP request is received&amp;rsquo;, find the post URL and copy it, as it will be needed for the next step.&lt;/p>
+&lt;h2 id="step-4-acr-webhook">Step 4: ACR webhook&lt;/h2>
+&lt;p>Next, we&amp;rsquo;ll create an ACR webhook which fires whenever the base image updates.&lt;/p>
+&lt;pre>&lt;code>URI=&amp;lt;webhook post url from prior step&amp;gt;
+az acr webhook create -n pythonbasehook -r $ACR_NAME \
+--scope baseimages/python-3.6-slim-base \
+--actions push --uri $URI
+&lt;/code>&lt;/pre>&lt;h2 id="step-5-enjoy">Step 5: Enjoy!&lt;/h2>
+&lt;p>We&amp;rsquo;ve done it! We now have a set up a set of integrations that does the following:
+&lt;img src="flow.png" alt="flow">&lt;/p>
+&lt;h2 id="step-6-test">Step 6: Test&lt;/h2>
+&lt;p>Since the Dockerhub base image is only going to be updated periodically, you can test your integration by manually running a build in ACR:&lt;/p>
+&lt;pre>&lt;code>az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
+--file $DOCKER_FILE $REPO
+&lt;/code>&lt;/pre>&lt;p>If all is working, this should trigger a build in Azure DevOps.&lt;/p>
+&lt;h2 id="final-thoughts">Final Thoughts&lt;/h2>
+&lt;p>An alternative to using a webhook would be to use an Event Grid to trigger the Logic App. This is slightly more work to set up, but it might better if you have a number of different pipelines that want to receive notifications when a base image updates. With a webhook, you&amp;rsquo;d need to set up a trigger for each and every one of them. Eventgrid, having a pubsub architecture, would fan-out one:many more effectively than webhooks.&lt;/p></description></item></channel></rss>
