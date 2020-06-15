@@ -4,12 +4,15 @@
 &lt;p>My immediate answer was &amp;ldquo;you can&amp;rsquo;t.&amp;rdquo; However, after a little investigation and a little hacking, I was able to prototype a solution using the &lt;a href="https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-base-image-update">automated trigger &amp;amp; build feature&lt;/a> of Azure Container Registry (ACR). The hint for how to do this was buried in the &lt;a href="https://github.com/MicrosoftDocs/azure-docs/issues/34480">Q&amp;amp;A&lt;/a> on documentation page, where it&amp;rsquo;s suggested to use a dummy image to trigger the AzDo pipeline. Here&amp;rsquo;s a walkthrough of how I did this:&lt;/p>
 &lt;h2 id="sample-repo--pipeline">Sample Repo &amp;amp; Pipeline&lt;/h2>
 &lt;p>As a sample repo, I used the canonical &lt;a href="https://dev.azure.com/larrydevopstest/_git/AzureVotingApp">Azure voting app&lt;/a>, but I simplified it a bit to suit my needs. My Dockerfile is pretty simple; my goal is for the build pipeline to run whenever the base python:3.6-slim image is updated on Dockerhub.&lt;/p>
-&lt;h3 id="step-1--create-a-dummy-base-image-and-task-in-acr">Step 1: Create a dummy base image and task in ACR&lt;/h3>
+&lt;pre>&lt;code>FROM python:3.6-slim
+RUN pip install redis
+RUN pip install flask
+ADD /azure-vote /app
+CMD [ &amp;quot;python&amp;quot;, &amp;quot;/app/main.py&amp;quot; ]
+&lt;/code>&lt;/pre>&lt;h3 id="step-1--create-a-dummy-base-image-and-task-in-acr">Step 1: Create a dummy base image and task in ACR&lt;/h3>
 &lt;p>As I mentioned above, I&amp;rsquo;m going to build a dummy base image using ACR, and then use a webhook when this image updates to trigger my Azure DevOps pipeline.&lt;/p>
 &lt;p>First, I&amp;rsquo;ll need to follow the instructions &lt;a href="https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-base-image-update">here&lt;/a> to create a dummy base image and a task to update it when its reference base updates on Dockerhub.&lt;/p>
-&lt;p>Dummy Dockerfile for base image:&lt;/p>
-&lt;pre>&lt;code>FROM python:3.6-slim
-&lt;/code>&lt;/pre>&lt;p>To start, build the base image in ACR:&lt;/p>
+&lt;p>To start, build the base image in ACR:&lt;/p>
 &lt;pre>&lt;code>ACR_NAME=larrymsvoting
 REPO=&amp;quot;https://larrydevopstest@dev.azure.com/larrydevopstest/AzureVotingApp/_git/AzureVotingApp&amp;quot;
 DOCKER_FILE=&amp;quot;azure-vote/Dockerfile-pythonbase&amp;quot;
