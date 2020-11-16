@@ -1,0 +1,35 @@
+<!doctype html><html lang=en><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><meta name=generator content="Hugo 0.78.2"><title>Create Issues Automatically with Dependabot - Larry Claman's Blog</title><meta name=description content="Creating Issues Automatically when Dependabot opens a Pull Request"><link rel=stylesheet href=/css/ui.css><link rel=stylesheet href="https://fonts.googleapis.com/css?family=Fira+Mono|Lato|Raleway"></head><body><header class="container no-print"><div class=u-header><nav class=bar><ul><li><a href=/><img class=icon-text src=/img/prev.svg></a></li><li><a href=/>Blog</a></li></ul></nav></div></header><main class=container><article><header><hgroup id=brand><h1>Create Issues Automatically with Dependabot</h1><h5><time datetime="2020-11-15 20:27:50 -0500 -0500">Nov 15, 2020</time>
+<span class=no-print>-
+<a href=/tags/github>github</a>
+<span></h5></hgroup><hr class=sep></header><p>I recently coached a DevOps hackathon where one of the sucess critera was &ldquo;Every PR must have an associated Issue&rdquo;. This is easy to enforce in Azure DevOps, and while it can&rsquo;t be currently enforced in GitHub, it&rsquo;s possible to use <a href=https://github.com/hattan/verify-linked-issue-action/>this</a> GitHub Action to verify that all pull requests in your repo contain a reference to an issue.</p><p>All fine and good, except that when I turned on Dependabot for my repo, I realized that Dependabot only creates pull requests, but it does not create issues, which doesn&rsquo;t meet my sucess criteria. Well, GitHub workflows to the rescue! The following workflow will create an issue whenever Dependabot opens a PR:</p><pre><code>name: CreateDependabotIssue
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - master
+    types: [ opened, reopened]
+
+jobs:
+  issue:
+      runs-on: ubuntu-latest
+      env:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      steps:
+        - uses: actions/checkout@v2
+          if: github.event.pull_request.user.login  == 'dependabot[bot]'
+          
+        - name: Open issue if Dependabot PR
+          if: github.event.pull_request.user.login  == 'dependabot[bot]'
+          env:
+            pr_title: ${{github.event.pull_request.title}}
+            pr_number: ${{github.event.pull_request.number}}
+            pr_url: ${{github.event.pull_request.url}}
+          run: |
+            title=&quot;Dependabot PR $pr_title opened&quot;
+            body=&quot;Dependabot has opened PR #$pr_number
+            Link: $pr_url&quot;
+            gh issue create --title &quot;$title&quot; --body &quot;$body&quot;    
+</code></pre></article><nav class="no-print post-nav"><a class=prev-post href=https://larryclaman.github.io/post/2020-04-14-azure-spot/><img class=icon-text src=/img/prev.svg>Converting an Azure VM to a Spot type</a></nav><div id=disqus_thread class=no-print></div><script type=text/javascript>(function(){if(window.location.hostname=="localhost")
+return;var dsq=document.createElement('script');dsq.type='text/javascript';dsq.async=true;var disqus_shortname='larryclamanblog';dsq.src='//'+disqus_shortname+'.disqus.com/embed.js';(document.getElementsByTagName('head')[0]||document.getElementsByTagName('body')[0]).appendChild(dsq);})();</script><noscript>Please enable JavaScript to view the <a href=http://disqus.com/?ref_noscript>comments powered by Disqus.</a></noscript><hr class=sep></main><footer class="container no-print"><div class=u-footer><a href=https://github.com/larryclaman/><img class=icon-social src=/img/github.svg alt=Github></a>
+<a href=https://larryclaman.github.io/index.xml target=_blank><img class=icon-social src=/img/feed.svg alt=Feed></a><p></p><a href=#brand><img class=icon-text src=/img/toup.svg alt="To Up">
+<span>Back to Top</span></a></div></footer></body></html>

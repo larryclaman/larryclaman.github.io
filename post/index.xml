@@ -1,4 +1,32 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Posts on Larry Claman's Blog</title><link>https://larryclaman.github.io/post/</link><description>Recent content in Posts on Larry Claman's Blog</description><generator>Hugo -- gohugo.io</generator><language>en</language><lastBuildDate>Tue, 14 Apr 2020 20:16:12 -0400</lastBuildDate><atom:link href="https://larryclaman.github.io/post/index.xml" rel="self" type="application/rss+xml"/><item><title>Converting an Azure VM to a Spot type</title><link>https://larryclaman.github.io/post/2020-04-14-azure-spot/</link><pubDate>Tue, 14 Apr 2020 20:16:12 -0400</pubDate><guid>https://larryclaman.github.io/post/2020-04-14-azure-spot/</guid><description>&lt;p>The Azure team recently announced support for &lt;a href="https://azure.microsoft.com/en-us/blog/announcing-the-preview-of-azure-spot-virtual-machines/">Spot Virtual Machines&lt;/a>. In case you&amp;rsquo;re not familiar, &lt;em>&amp;ldquo;Azure Spot Virtual Machines provide access to unused Azure compute capacity at deep discounts.&amp;quot;&lt;/em> The tradeoff is, a Spot VM can be evicted at any time.&lt;/p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Posts on Larry Claman's Blog</title><link>https://larryclaman.github.io/post/</link><description>Recent content in Posts on Larry Claman's Blog</description><generator>Hugo -- gohugo.io</generator><language>en</language><lastBuildDate>Sun, 15 Nov 2020 20:27:50 -0500</lastBuildDate><atom:link href="https://larryclaman.github.io/post/index.xml" rel="self" type="application/rss+xml"/><item><title>Create Issues Automatically with Dependabot</title><link>https://larryclaman.github.io/post/2020-11-15-dependabot/</link><pubDate>Sun, 15 Nov 2020 20:27:50 -0500</pubDate><guid>https://larryclaman.github.io/post/2020-11-15-dependabot/</guid><description>&lt;p>I recently coached a DevOps hackathon where one of the sucess critera was &amp;ldquo;Every PR must have an associated Issue&amp;rdquo;. This is easy to enforce in Azure DevOps, and while it can&amp;rsquo;t be currently enforced in GitHub, it&amp;rsquo;s possible to use &lt;a href="https://github.com/hattan/verify-linked-issue-action/">this&lt;/a> GitHub Action to verify that all pull requests in your repo contain a reference to an issue.&lt;/p>
+&lt;p>All fine and good, except that when I turned on Dependabot for my repo, I realized that Dependabot only creates pull requests, but it does not create issues, which doesn&amp;rsquo;t meet my sucess criteria. Well, GitHub workflows to the rescue! The following workflow will create an issue whenever Dependabot opens a PR:&lt;/p>
+&lt;pre>&lt;code>name: CreateDependabotIssue
+on:
+workflow_dispatch:
+pull_request:
+branches:
+- master
+types: [ opened, reopened]
+jobs:
+issue:
+runs-on: ubuntu-latest
+env:
+GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+steps:
+- uses: actions/checkout@v2
+if: github.event.pull_request.user.login == 'dependabot[bot]'
+- name: Open issue if Dependabot PR
+if: github.event.pull_request.user.login == 'dependabot[bot]'
+env:
+pr_title: ${{github.event.pull_request.title}}
+pr_number: ${{github.event.pull_request.number}}
+pr_url: ${{github.event.pull_request.url}}
+run: |
+title=&amp;quot;Dependabot PR $pr_title opened&amp;quot;
+body=&amp;quot;Dependabot has opened PR #$pr_number
+Link: $pr_url&amp;quot;
+gh issue create --title &amp;quot;$title&amp;quot; --body &amp;quot;$body&amp;quot;
+&lt;/code>&lt;/pre></description></item><item><title>Converting an Azure VM to a Spot type</title><link>https://larryclaman.github.io/post/2020-04-14-azure-spot/</link><pubDate>Tue, 14 Apr 2020 20:16:12 -0400</pubDate><guid>https://larryclaman.github.io/post/2020-04-14-azure-spot/</guid><description>&lt;p>The Azure team recently announced support for &lt;a href="https://azure.microsoft.com/en-us/blog/announcing-the-preview-of-azure-spot-virtual-machines/">Spot Virtual Machines&lt;/a>. In case you&amp;rsquo;re not familiar, &lt;em>&amp;ldquo;Azure Spot Virtual Machines provide access to unused Azure compute capacity at deep discounts.&amp;quot;&lt;/em> The tradeoff is, a Spot VM can be evicted at any time.&lt;/p>
 &lt;p>Currently, there&amp;rsquo;s no way to dynamically change an existing VM type to become a Spot. However, using PowerShell, you can perform some &amp;lsquo;magic&amp;rsquo; to reprovision an existing VM as a new Spot instance.&lt;/p>
 &lt;p>Here&amp;rsquo;s the script I put together:&lt;/p>
 &lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-powershell" data-lang="powershell">&lt;span class="cm">&amp;lt;# Convert a VM to a Spot VM
