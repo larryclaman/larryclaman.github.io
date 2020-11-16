@@ -1,122 +1,167 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>azure on Larry Claman's Blog</title><link>https://larryclaman.github.io/tags/azure/</link><description>Recent content in azure on Larry Claman's Blog</description><generator>Hugo -- gohugo.io</generator><language>en</language><lastBuildDate>Tue, 14 Apr 2020 20:16:12 -0400</lastBuildDate><atom:link href="https://larryclaman.github.io/tags/azure/index.xml" rel="self" type="application/rss+xml"/><item><title>Converting an Azure VM to a Spot type</title><link>https://larryclaman.github.io/post/2020-04-14-azure-spot/</link><pubDate>Tue, 14 Apr 2020 20:16:12 -0400</pubDate><guid>https://larryclaman.github.io/post/2020-04-14-azure-spot/</guid><description>&lt;p>The Azure team recently announced support for &lt;a href="https://azure.microsoft.com/en-us/blog/announcing-the-preview-of-azure-spot-virtual-machines/">Spot Virtual Machines&lt;/a>. In case you&amp;rsquo;re not familiar, &lt;em>&amp;ldquo;Azure Spot Virtual Machines provide access to unused Azure compute capacity at deep discounts.&amp;quot;&lt;/em> The tradeoff is, a Spot VM can be evicted at any time.&lt;/p>
-&lt;p>Currently, there&amp;rsquo;s no way to dynamically change an existing VM type to become a Spot. However, using PowerShell, you can perform some &amp;lsquo;magic&amp;rsquo; to reprovision an existing VM as a new Spot instance.&lt;/p>
-&lt;p>Here&amp;rsquo;s the script I put together:&lt;/p>
-&lt;div class="highlight">&lt;pre class="chroma">&lt;code class="language-powershell" data-lang="powershell">&lt;span class="cm">&amp;lt;# Convert a VM to a Spot VM
-&lt;/span>&lt;span class="cm">Based on sample script at https://docs.microsoft.com/en-us/azure/virtual-machines/windows/change-availability-set
-&lt;/span>&lt;span class="cm">NOTE: Extensions will not be copied to new instance!!
-&lt;/span>&lt;span class="cm">#&amp;gt;&lt;/span>
-&lt;span class="c"># Set variables to your specifics&lt;/span>
-&lt;span class="nv">$resourceGroup&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="s2">&amp;#34;myRG&amp;#34;&lt;/span>
-&lt;span class="nv">$vmName&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="s2">&amp;#34;myVM&amp;#34;&lt;/span>
-&lt;span class="c"># Get the details of the VM to be moved to the Availability Set&lt;/span>
-&lt;span class="nv">$originalVM&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="nb">Get-AzVM&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-ResourceGroupName&lt;/span> &lt;span class="nv">$resourceGroup&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-Name&lt;/span> &lt;span class="nv">$vmName&lt;/span>
-&lt;span class="c"># Create the basic configuration for the replacement VM. &lt;/span>
-&lt;span class="nv">$newVM&lt;/span> &lt;span class="p">=&lt;/span> &lt;span class="nb">New-AzVMConfig&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-VMName&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Name&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-VMSize&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">HardwareProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">VmSize&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-Priority&lt;/span> &lt;span class="s2">&amp;#34;Spot&amp;#34;&lt;/span> &lt;span class="n">-MaxPrice&lt;/span> &lt;span class="p">-&lt;/span>&lt;span class="n">1&lt;/span>
-&lt;span class="c"># Confgure OS Disk&lt;/span>
-&lt;span class="nb">Set-AzVMOSDisk&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-VM&lt;/span> &lt;span class="nv">$newVM&lt;/span> &lt;span class="n">-CreateOption&lt;/span> &lt;span class="n">Attach&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-ManagedDiskId&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">StorageProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OsDisk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">ManagedDisk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Id&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-Name&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">StorageProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OsDisk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Name&lt;/span>
-&lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OSProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">WindowsConfiguration&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
-&lt;span class="nv">$newVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">StorageProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OsDisk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OsType&lt;/span>&lt;span class="p">=&lt;/span>&lt;span class="s2">&amp;#34;Windows&amp;#34;&lt;/span>
-&lt;span class="p">}&lt;/span> &lt;span class="k">else&lt;/span> &lt;span class="p">{&lt;/span>
-&lt;span class="nv">$newVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">StorageProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OsDisk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">OsType&lt;/span>&lt;span class="p">=&lt;/span>&lt;span class="s2">&amp;#34;Linux&amp;#34;&lt;/span>
-&lt;span class="p">}&lt;/span>
-&lt;span class="c"># Add Data Disks&lt;/span>
-&lt;span class="k">foreach&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nv">$disk&lt;/span> &lt;span class="k">in&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">StorageProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">DataDisks&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
-&lt;span class="nb">Add-AzVMDataDisk&lt;/span> &lt;span class="n">-VM&lt;/span> &lt;span class="nv">$newVM&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-Name&lt;/span> &lt;span class="nv">$disk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Name&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-ManagedDiskId&lt;/span> &lt;span class="nv">$disk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">ManagedDisk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Id&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-Caching&lt;/span> &lt;span class="nv">$disk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Caching&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-Lun&lt;/span> &lt;span class="nv">$disk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Lun&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-DiskSizeInGB&lt;/span> &lt;span class="nv">$disk&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">DiskSizeGB&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-CreateOption&lt;/span> &lt;span class="n">Attach&lt;/span>
-&lt;span class="p">}&lt;/span>
-&lt;span class="c"># Add NIC(s) and keep the same NIC as primary&lt;/span>
-&lt;span class="k">foreach&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nv">$nic&lt;/span> &lt;span class="k">in&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">NetworkProfile&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">NetworkInterfaces&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
-&lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nv">$nic&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Primary&lt;/span> &lt;span class="o">-eq&lt;/span> &lt;span class="s2">&amp;#34;True&amp;#34;&lt;/span>&lt;span class="p">)&lt;/span>
-&lt;span class="p">{&lt;/span>
-&lt;span class="nb">Add-AzVMNetworkInterface&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-VM&lt;/span> &lt;span class="nv">$newVM&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-Id&lt;/span> &lt;span class="nv">$nic&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Id&lt;/span> &lt;span class="n">-Primary&lt;/span>
-&lt;span class="p">}&lt;/span>
-&lt;span class="k">else&lt;/span>
-&lt;span class="p">{&lt;/span>
-&lt;span class="nb">Add-AzVMNetworkInterface&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-VM&lt;/span> &lt;span class="nv">$newVM&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-Id&lt;/span> &lt;span class="nv">$nic&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Id&lt;/span>
-&lt;span class="p">}&lt;/span>
-&lt;span class="p">}&lt;/span>
-&lt;span class="k">if&lt;/span> &lt;span class="p">(&lt;/span>&lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">AvailabilitySetReference&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Id&lt;/span>&lt;span class="p">)&lt;/span> &lt;span class="p">{&lt;/span>
-&lt;span class="nb">echo &lt;/span>&lt;span class="s2">&amp;#34;Warning: VM $originalVM.Name is in an availability set. Spot VMs cannot run in availability sets.&amp;#34;&lt;/span>
-&lt;span class="p">}&lt;/span>
-&lt;span class="c"># Remove the original VM&lt;/span>
-&lt;span class="nb">Remove-AzVM&lt;/span> &lt;span class="n">-ResourceGroupName&lt;/span> &lt;span class="nv">$resourceGroup&lt;/span> &lt;span class="n">-Name&lt;/span> &lt;span class="nv">$vmName&lt;/span>
-&lt;span class="c"># Recreate the VM&lt;/span>
-&lt;span class="nb">New-AzVM&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-ResourceGroupName&lt;/span> &lt;span class="nv">$resourceGroup&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-Location&lt;/span> &lt;span class="nv">$originalVM&lt;/span>&lt;span class="p">.&lt;/span>&lt;span class="n">Location&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-VM&lt;/span> &lt;span class="nv">$newVM&lt;/span> &lt;span class="p">`&lt;/span>
-&lt;span class="n">-DisableBginfoExtension&lt;/span>
-&lt;/code>&lt;/pre>&lt;/div></description></item><item><title>Querying for Azure Regional Pairs</title><link>https://larryclaman.github.io/post/2020-04-09-querying-for-azure-regional-pairs/</link><pubDate>Thu, 09 Apr 2020 18:16:04 -0400</pubDate><guid>https://larryclaman.github.io/post/2020-04-09-querying-for-azure-regional-pairs/</guid><description>&lt;p>A teammate recently posted a question on our Team&amp;rsquo;s channel, asking how to programmatically query to find out an Azure Region&amp;rsquo;s pair. Easy I thought - except it turns out, this isn&amp;rsquo;t exposed in the standard PowerShell commands, nor in the Azure CLI.&lt;/p>
-&lt;p>The PowerShell command &lt;strong>Get-AzLocation&lt;/strong> only returns the Location, DisplayName, and Providers:&lt;/p>
-&lt;pre>&lt;code>PS C:\&amp;gt; Get-AzLocation|ft
-Location DisplayName Providers
--------- ----------- ---------
-eastasia East Asia {Microsoft.Media, Microsoft.HDInsight, Microsoft.SqlVirtualMachine, Microsoft.DevOps...}
-southeastasia Southeast Asia {Microsoft.Media, Microsoft.HDInsight, Microsoft.DataShare, Microsoft.SqlVirtualMachine...}
-centralus Central US {Microsoft.Media, Microsoft.HDInsight, Microsoft.SqlVirtualMachine, Microsoft.DevOps...}
-eastus East US {Microsoft.Media, Microsoft.HDInsight, Microsoft.DataShare, Microsoft.SqlVirtualMachine...}
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>azure on Larry Claman&#39;s Blog</title>
+    <link>https://larryclaman.github.io/tags/azure/</link>
+    <description>Recent content in azure on Larry Claman&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Tue, 14 Apr 2020 20:16:12 -0400</lastBuildDate>
+    
+	<atom:link href="https://larryclaman.github.io/tags/azure/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Converting an Azure VM to a Spot type</title>
+      <link>https://larryclaman.github.io/post/2020-04-14-azure-spot/</link>
+      <pubDate>Tue, 14 Apr 2020 20:16:12 -0400</pubDate>
+      
+      <guid>https://larryclaman.github.io/post/2020-04-14-azure-spot/</guid>
+      <description>&lt;p&gt;The Azure team recently announced support for &lt;a href=&#34;https://azure.microsoft.com/en-us/blog/announcing-the-preview-of-azure-spot-virtual-machines/&#34;&gt;Spot Virtual Machines&lt;/a&gt;.  In case you&amp;rsquo;re not familiar, &lt;em&gt;&amp;ldquo;Azure Spot Virtual Machines provide access to unused Azure compute capacity at deep discounts.&amp;quot;&lt;/em&gt;  The tradeoff is, a Spot VM can be evicted at any time.&lt;/p&gt;
+&lt;p&gt;Currently, there&amp;rsquo;s no way to dynamically change an existing VM type to become a Spot.  However, using PowerShell, you can perform some &amp;lsquo;magic&amp;rsquo; to reprovision an existing VM as a new Spot instance.&lt;/p&gt;
+&lt;p&gt;Here&amp;rsquo;s the script I put together:&lt;/p&gt;
+&lt;div class=&#34;highlight&#34;&gt;&lt;pre class=&#34;chroma&#34;&gt;&lt;code class=&#34;language-powershell&#34; data-lang=&#34;powershell&#34;&gt;&lt;span class=&#34;cm&#34;&gt;&amp;lt;# Convert a VM to a Spot VM
+&lt;/span&gt;&lt;span class=&#34;cm&#34;&gt;Based on sample script at https://docs.microsoft.com/en-us/azure/virtual-machines/windows/change-availability-set
+&lt;/span&gt;&lt;span class=&#34;cm&#34;&gt;NOTE:  Extensions will not be copied to new instance!!
+&lt;/span&gt;&lt;span class=&#34;cm&#34;&gt;#&amp;gt;&lt;/span&gt;
+
+&lt;span class=&#34;c&#34;&gt;# Set variables to your specifics&lt;/span&gt;
+&lt;span class=&#34;nv&#34;&gt;$resourceGroup&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&amp;#34;myRG&amp;#34;&lt;/span&gt;
+&lt;span class=&#34;nv&#34;&gt;$vmName&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&amp;#34;myVM&amp;#34;&lt;/span&gt;
+
+&lt;span class=&#34;c&#34;&gt;# Get the details of the VM to be moved to the Availability Set&lt;/span&gt;
+&lt;span class=&#34;nv&#34;&gt;$originalVM&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;nb&#34;&gt;Get-AzVM&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-ResourceGroupName&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$resourceGroup&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-Name&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$vmName&lt;/span&gt;
+ 
+&lt;span class=&#34;c&#34;&gt;# Create the basic configuration for the replacement VM. &lt;/span&gt;
+&lt;span class=&#34;nv&#34;&gt;$newVM&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;=&lt;/span&gt; &lt;span class=&#34;nb&#34;&gt;New-AzVMConfig&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-VMName&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$originalVM&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Name&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-VMSize&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$originalVM&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;HardwareProfile&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;VmSize&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-Priority&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&amp;#34;Spot&amp;#34;&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;-MaxPrice&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;-&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;1&lt;/span&gt;
+
+&lt;span class=&#34;c&#34;&gt;# Confgure OS Disk&lt;/span&gt;
+&lt;span class=&#34;nb&#34;&gt;Set-AzVMOSDisk&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-VM&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$newVM&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;-CreateOption&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Attach&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-ManagedDiskId&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$originalVM&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;StorageProfile&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;OsDisk&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;ManagedDisk&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Id&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-Name&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$originalVM&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;StorageProfile&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;OsDisk&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Name&lt;/span&gt; 
+
+&lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;$originalVM&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;OSProfile&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;WindowsConfiguration&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+    &lt;span class=&#34;nv&#34;&gt;$newVM&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;StorageProfile&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;OsDisk&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;OsType&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&amp;#34;Windows&amp;#34;&lt;/span&gt; 
+    &lt;span class=&#34;p&#34;&gt;}&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;else&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+    &lt;span class=&#34;nv&#34;&gt;$newVM&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;StorageProfile&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;OsDisk&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;OsType&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;=&lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&amp;#34;Linux&amp;#34;&lt;/span&gt;
+    &lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;  
+
+&lt;span class=&#34;c&#34;&gt;# Add Data Disks&lt;/span&gt;
+&lt;span class=&#34;k&#34;&gt;foreach&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;$disk&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;in&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$originalVM&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;StorageProfile&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;DataDisks&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt; 
+    &lt;span class=&#34;nb&#34;&gt;Add-AzVMDataDisk&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;-VM&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$newVM&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-Name&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$disk&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Name&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-ManagedDiskId&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$disk&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;ManagedDisk&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Id&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-Caching&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$disk&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Caching&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-Lun&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$disk&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Lun&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-DiskSizeInGB&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$disk&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;DiskSizeGB&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-CreateOption&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;Attach&lt;/span&gt;
+    &lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+    
+&lt;span class=&#34;c&#34;&gt;# Add NIC(s) and keep the same NIC as primary&lt;/span&gt;
+&lt;span class=&#34;k&#34;&gt;foreach&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;$nic&lt;/span&gt; &lt;span class=&#34;k&#34;&gt;in&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$originalVM&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;NetworkProfile&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;NetworkInterfaces&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;    
+    &lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;$nic&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Primary&lt;/span&gt; &lt;span class=&#34;o&#34;&gt;-eq&lt;/span&gt; &lt;span class=&#34;s2&#34;&gt;&amp;#34;True&amp;#34;&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt;
+        &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+            &lt;span class=&#34;nb&#34;&gt;Add-AzVMNetworkInterface&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+               &lt;span class=&#34;n&#34;&gt;-VM&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$newVM&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+               &lt;span class=&#34;n&#34;&gt;-Id&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$nic&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Id&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;-Primary&lt;/span&gt;
+               &lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+           &lt;span class=&#34;k&#34;&gt;else&lt;/span&gt;
+               &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+                 &lt;span class=&#34;nb&#34;&gt;Add-AzVMNetworkInterface&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+                &lt;span class=&#34;n&#34;&gt;-VM&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$newVM&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+                 &lt;span class=&#34;n&#34;&gt;-Id&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$nic&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Id&lt;/span&gt; 
+                &lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+      &lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+
+&lt;span class=&#34;k&#34;&gt;if&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;(&lt;/span&gt;&lt;span class=&#34;nv&#34;&gt;$originalVM&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;AvailabilitySetReference&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Id&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;)&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;{&lt;/span&gt;
+    &lt;span class=&#34;nb&#34;&gt;echo &lt;/span&gt;&lt;span class=&#34;s2&#34;&gt;&amp;#34;Warning: VM $originalVM.Name is in an availability set.  Spot VMs cannot run in availability sets.&amp;#34;&lt;/span&gt;
+    &lt;span class=&#34;p&#34;&gt;}&lt;/span&gt;
+
+&lt;span class=&#34;c&#34;&gt;# Remove the original VM&lt;/span&gt;
+&lt;span class=&#34;nb&#34;&gt;Remove-AzVM&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;-ResourceGroupName&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$resourceGroup&lt;/span&gt; &lt;span class=&#34;n&#34;&gt;-Name&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$vmName&lt;/span&gt;   
+
+&lt;span class=&#34;c&#34;&gt;# Recreate the VM&lt;/span&gt;
+&lt;span class=&#34;nb&#34;&gt;New-AzVM&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-ResourceGroupName&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$resourceGroup&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-Location&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$originalVM&lt;/span&gt;&lt;span class=&#34;p&#34;&gt;.&lt;/span&gt;&lt;span class=&#34;n&#34;&gt;Location&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-VM&lt;/span&gt; &lt;span class=&#34;nv&#34;&gt;$newVM&lt;/span&gt; &lt;span class=&#34;p&#34;&gt;`&lt;/span&gt;
+       &lt;span class=&#34;n&#34;&gt;-DisableBginfoExtension&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;</description>
+    </item>
+    
+    <item>
+      <title>Querying for Azure Regional Pairs</title>
+      <link>https://larryclaman.github.io/post/2020-04-09-querying-for-azure-regional-pairs/</link>
+      <pubDate>Thu, 09 Apr 2020 18:16:04 -0400</pubDate>
+      
+      <guid>https://larryclaman.github.io/post/2020-04-09-querying-for-azure-regional-pairs/</guid>
+      <description>&lt;p&gt;A teammate recently posted a question on our Team&amp;rsquo;s channel, asking how to programmatically query to find out an Azure Region&amp;rsquo;s pair.  Easy I thought - except it turns out, this isn&amp;rsquo;t exposed in the standard PowerShell commands, nor in the Azure CLI.&lt;/p&gt;
+&lt;p&gt;The PowerShell command &lt;strong&gt;Get-AzLocation&lt;/strong&gt; only returns the Location, DisplayName, and Providers:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;PS C:\&amp;gt; Get-AzLocation|ft
+
+Location           DisplayName          Providers
+--------           -----------          ---------
+eastasia           East Asia            {Microsoft.Media, Microsoft.HDInsight, Microsoft.SqlVirtualMachine, Microsoft.DevOps...}
+southeastasia      Southeast Asia       {Microsoft.Media, Microsoft.HDInsight, Microsoft.DataShare, Microsoft.SqlVirtualMachine...}
+centralus          Central US           {Microsoft.Media, Microsoft.HDInsight, Microsoft.SqlVirtualMachine, Microsoft.DevOps...}
+eastus             East US              {Microsoft.Media, Microsoft.HDInsight, Microsoft.DataShare, Microsoft.SqlVirtualMachine...}
 [snip]
-&lt;/code>&lt;/pre>&lt;p>Meanwhile, the Azure CLI returns more info, but not the pair:&lt;/p>
-&lt;pre>&lt;code>PS C:\&amp;gt; az account list-locations
-DisplayName Latitude Longitude Name
--------------------- ---------- ----------- ------------------
-East Asia 22.267 114.188 eastasia
-Southeast Asia 1.283 103.833 southeastasia
-Central US 41.5908 -93.6208 centralus
-East US 37.3719 -79.8164 eastus
-East US 2 36.6681 -78.3889 eastus2
-West US 37.783 -122.417 westus
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Meanwhile, the Azure CLI returns more info, but not the pair:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;PS C:\&amp;gt; az account list-locations
+DisplayName           Latitude    Longitude    Name
+--------------------  ----------  -----------  ------------------
+East Asia             22.267      114.188      eastasia
+Southeast Asia        1.283       103.833      southeastasia
+Central US            41.5908     -93.6208     centralus
+East US               37.3719     -79.8164     eastus
+East US 2             36.6681     -78.3889     eastus2
+West US               37.783      -122.417     westus
 [snip]
-&lt;/code>&lt;/pre>&lt;p>All hope is not lost! You can find the region&amp;rsquo;s pair, but you need to query the Azure REST api directly, as documented at &lt;a href="https://docs.microsoft.com/en-us/rest/api/resources/Subscriptions/ListLocations">https://docs.microsoft.com/en-us/rest/api/resources/Subscriptions/ListLocations&lt;/a>. In the past, you&amp;rsquo;d need to fire up your favorite REST client (eg, &lt;a href="https://github.com/projectkudu/ARMClient">armclient&lt;/a>, Vscode + &lt;a href="https://marketplace.visualstudio.com/items?itemName=humao.rest-client">rest client extension&lt;/a>, Postman, etc), but in exploring this, I learned an easier way: You can now make Azure REST calls directly from the CLI! Here&amp;rsquo;s what that looks like: &lt;em>(Replace {yoursubid} with your specific subscription id)&lt;/em>&lt;/p>
-&lt;pre>&lt;code>az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output json
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;All hope is not lost!  You can find the region&amp;rsquo;s pair, but you need to query the Azure REST api directly, as documented at &lt;a href=&#34;https://docs.microsoft.com/en-us/rest/api/resources/Subscriptions/ListLocations&#34;&gt;https://docs.microsoft.com/en-us/rest/api/resources/Subscriptions/ListLocations&lt;/a&gt;.  In the past, you&amp;rsquo;d need to fire up your favorite REST client (eg, &lt;a href=&#34;https://github.com/projectkudu/ARMClient&#34;&gt;armclient&lt;/a&gt;, Vscode + &lt;a href=&#34;https://marketplace.visualstudio.com/items?itemName=humao.rest-client&#34;&gt;rest client extension&lt;/a&gt;, Postman, etc), but in exploring this, I learned an easier way:  You can now make Azure REST calls directly from the CLI!  Here&amp;rsquo;s what that looks like:   &lt;em&gt;(Replace {yoursubid} with your specific subscription id)&lt;/em&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output json
 {
-&amp;quot;value&amp;quot;: [
-{
-&amp;quot;displayName&amp;quot;: &amp;quot;East US&amp;quot;,
-&amp;quot;id&amp;quot;: &amp;quot;/subscriptions/{yoursubid}/locations/eastus&amp;quot;,
-&amp;quot;metadata&amp;quot;: {
-&amp;quot;geographyGroup&amp;quot;: &amp;quot;US&amp;quot;,
-&amp;quot;latitude&amp;quot;: &amp;quot;37.3719&amp;quot;,
-&amp;quot;longitude&amp;quot;: &amp;quot;-79.8164&amp;quot;,
-&amp;quot;pairedRegion&amp;quot;: [
-{
-&amp;quot;id&amp;quot;: &amp;quot;/subscriptions/{yoursubid}/locations/westus&amp;quot;,
-&amp;quot;name&amp;quot;: &amp;quot;westus&amp;quot;
-}
-],
-&amp;quot;physicalLocation&amp;quot;: &amp;quot;Virginia&amp;quot;,
-&amp;quot;regionCategory&amp;quot;: &amp;quot;Recommended&amp;quot;,
-&amp;quot;regionType&amp;quot;: &amp;quot;Physical&amp;quot;
-},
-&amp;quot;name&amp;quot;: &amp;quot;eastus&amp;quot;,
-&amp;quot;regionalDisplayName&amp;quot;: &amp;quot;(US) East US&amp;quot;
-},
+  &amp;quot;value&amp;quot;: [
+    {
+      &amp;quot;displayName&amp;quot;: &amp;quot;East US&amp;quot;,
+      &amp;quot;id&amp;quot;: &amp;quot;/subscriptions/{yoursubid}/locations/eastus&amp;quot;,
+      &amp;quot;metadata&amp;quot;: {
+        &amp;quot;geographyGroup&amp;quot;: &amp;quot;US&amp;quot;,
+        &amp;quot;latitude&amp;quot;: &amp;quot;37.3719&amp;quot;,
+        &amp;quot;longitude&amp;quot;: &amp;quot;-79.8164&amp;quot;,
+        &amp;quot;pairedRegion&amp;quot;: [
+          {
+            &amp;quot;id&amp;quot;: &amp;quot;/subscriptions/{yoursubid}/locations/westus&amp;quot;,
+            &amp;quot;name&amp;quot;: &amp;quot;westus&amp;quot;
+          }
+        ],
+        &amp;quot;physicalLocation&amp;quot;: &amp;quot;Virginia&amp;quot;,
+        &amp;quot;regionCategory&amp;quot;: &amp;quot;Recommended&amp;quot;,
+        &amp;quot;regionType&amp;quot;: &amp;quot;Physical&amp;quot;
+      },
+      &amp;quot;name&amp;quot;: &amp;quot;eastus&amp;quot;,
+      &amp;quot;regionalDisplayName&amp;quot;: &amp;quot;(US) East US&amp;quot;
+    },
 [snip]
-&lt;/code>&lt;/pre>&lt;p>What&amp;rsquo;s really cool is you can use the CLI&amp;rsquo;s built-in jmespath query engine to filter and massage the results, eg: &lt;em>(Column1 is the region, and Column2 is the pair)&lt;/em>&lt;/p>
-&lt;pre>&lt;code>az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output table --query 'value[].[name,metadata.pairedRegion[].name]'
-Column1 Column2
-------------------- ----------------------
-eastus ['westus']
-eastus2 ['centralus']
-southcentralus ['northcentralus']
-westus2 ['westcentralus']
-australiaeast ['australiasoutheast']
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;What&amp;rsquo;s really cool is you can use the CLI&amp;rsquo;s built-in jmespath query engine to filter and massage the results, eg: &lt;em&gt;(Column1 is the region, and Column2 is the pair)&lt;/em&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output table --query &#39;value[].[name,metadata.pairedRegion[].name]&#39;
+
+Column1              Column2
+-------------------  ----------------------
+eastus               [&#39;westus&#39;]
+eastus2              [&#39;centralus&#39;]
+southcentralus       [&#39;northcentralus&#39;]
+westus2              [&#39;westcentralus&#39;]
+australiaeast        [&#39;australiasoutheast&#39;]
 [snip]
-&lt;/code>&lt;/pre>&lt;p>(I&amp;rsquo;m still working on my jmespath ninja skills, so there&amp;rsquo;s still a little cleanup to be done on this table, but it gets the point across.)&lt;/p></description></item></channel></rss>
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;(I&amp;rsquo;m still working on my jmespath ninja skills, so there&amp;rsquo;s still a little cleanup to be done on this table, but it gets the point across.)&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

@@ -1,57 +1,85 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>azure-devops on Larry Claman's Blog</title><link>https://larryclaman.github.io/tags/azure-devops/</link><description>Recent content in azure-devops on Larry Claman's Blog</description><generator>Hugo -- gohugo.io</generator><language>en</language><lastBuildDate>Sun, 10 Nov 2019 21:42:45 -0500</lastBuildDate><atom:link href="https://larryclaman.github.io/tags/azure-devops/index.xml" rel="self" type="application/rss+xml"/><item><title>Trigger Azure DevOps Build pipeline from Docker image update</title><link>https://larryclaman.github.io/post/2019-11-10-trigger-docker-build-azdo/</link><pubDate>Sun, 10 Nov 2019 21:42:45 -0500</pubDate><guid>https://larryclaman.github.io/post/2019-11-10-trigger-docker-build-azdo/</guid><description>&lt;p>&lt;em>This is the first in a series of posts about automating Docker image builds.&lt;/em>&lt;/p>
-&lt;h2 id="how-to-trigger-a-build">How to trigger a build?&lt;/h2>
-&lt;p>I was recently asked how to trigger a classic (gui) Azure DevOps build pipeline when a Docker base image updates. You might want to do this, for example, if your build pipeline includes unit, functional, or security tests.&lt;/p>
-&lt;p>My immediate answer was &amp;ldquo;you can&amp;rsquo;t.&amp;rdquo; However, after a little investigation and a little hacking, I was able to prototype a solution using the &lt;a href="https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-base-image-update">automated trigger &amp;amp; build feature&lt;/a> of Azure Container Registry (ACR). The hint for how to do this was buried in the &lt;a href="https://github.com/MicrosoftDocs/azure-docs/issues/34480">Q&amp;amp;A&lt;/a> on documentation page, where it&amp;rsquo;s suggested to use a dummy image to trigger the AzDo pipeline. Here&amp;rsquo;s a walkthrough of how I did this:&lt;/p>
-&lt;h2 id="sample-repo--pipeline">Sample Repo &amp;amp; Pipeline&lt;/h2>
-&lt;p>As a sample repo, I used the canonical &lt;a href="https://dev.azure.com/larrydevopstest/_git/AzureVotingApp">Azure voting app&lt;/a>, but I simplified it a bit to suit my needs. My Dockerfile is pretty simple; my goal is for the build pipeline to run whenever the base python:3.6-slim image is updated on Dockerhub.&lt;/p>
-&lt;pre>&lt;code>FROM python:3.6-slim
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>azure-devops on Larry Claman&#39;s Blog</title>
+    <link>https://larryclaman.github.io/tags/azure-devops/</link>
+    <description>Recent content in azure-devops on Larry Claman&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Sun, 10 Nov 2019 21:42:45 -0500</lastBuildDate>
+    
+	<atom:link href="https://larryclaman.github.io/tags/azure-devops/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Trigger Azure DevOps Build pipeline from Docker image update</title>
+      <link>https://larryclaman.github.io/post/2019-11-10-trigger-docker-build-azdo/</link>
+      <pubDate>Sun, 10 Nov 2019 21:42:45 -0500</pubDate>
+      
+      <guid>https://larryclaman.github.io/post/2019-11-10-trigger-docker-build-azdo/</guid>
+      <description>&lt;p&gt;&lt;em&gt;This is the first in a series of posts about automating Docker image builds.&lt;/em&gt;&lt;/p&gt;
+&lt;h2 id=&#34;how-to-trigger-a-build&#34;&gt;How to trigger a build?&lt;/h2&gt;
+&lt;p&gt;I was recently asked how to trigger a classic (gui) Azure DevOps build pipeline when a Docker base image updates.  You might want to do this, for example, if your build pipeline includes unit, functional, or security tests.&lt;/p&gt;
+&lt;p&gt;My immediate answer was &amp;ldquo;you can&amp;rsquo;t.&amp;rdquo;  However, after a little investigation and a little hacking, I was able to prototype a solution using the &lt;a href=&#34;https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-base-image-update&#34;&gt;automated trigger &amp;amp; build feature&lt;/a&gt; of Azure Container Registry (ACR).  The hint for how to do this was buried in the &lt;a href=&#34;https://github.com/MicrosoftDocs/azure-docs/issues/34480&#34;&gt;Q&amp;amp;A&lt;/a&gt; on documentation page, where it&amp;rsquo;s suggested to use a dummy image to trigger the AzDo pipeline.  Here&amp;rsquo;s a walkthrough of how I did this:&lt;/p&gt;
+&lt;h2 id=&#34;sample-repo--pipeline&#34;&gt;Sample Repo &amp;amp; Pipeline&lt;/h2&gt;
+&lt;p&gt;As a sample repo, I used the canonical &lt;a href=&#34;https://dev.azure.com/larrydevopstest/_git/AzureVotingApp&#34;&gt;Azure voting app&lt;/a&gt;, but I simplified it a bit to suit my needs. My Dockerfile is pretty simple; my goal is for the build pipeline to run whenever the base python:3.6-slim image is updated on Dockerhub.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;FROM python:3.6-slim
 RUN pip install redis
 RUN pip install flask
 ADD /azure-vote /app
+
 CMD [ &amp;quot;python&amp;quot;, &amp;quot;/app/main.py&amp;quot; ]
-&lt;/code>&lt;/pre>&lt;h3 id="step-1--create-a-dummy-base-image-and-task-in-acr">Step 1: Create a dummy base image and task in ACR&lt;/h3>
-&lt;p>As I mentioned above, I&amp;rsquo;m going to build a dummy base image using ACR, and then use a webhook when this image updates to trigger my Azure DevOps pipeline.&lt;/p>
-&lt;p>First, I&amp;rsquo;ll need to follow the instructions &lt;a href="https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-base-image-update">here&lt;/a> to create a dummy base image and a task to update it when its reference base updates on Dockerhub.&lt;/p>
-&lt;p>To start, build the base image in ACR:&lt;/p>
-&lt;pre>&lt;code>ACR_NAME=larrymsvoting
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;step-1--create-a-dummy-base-image-and-task-in-acr&#34;&gt;Step 1:  Create a dummy base image and task in ACR&lt;/h3&gt;
+&lt;p&gt;As I mentioned above, I&amp;rsquo;m going to build a dummy base image using ACR, and then use a webhook when this image updates to trigger my Azure DevOps pipeline.&lt;/p&gt;
+&lt;p&gt;First, I&amp;rsquo;ll need to follow the instructions &lt;a href=&#34;https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-base-image-update&#34;&gt;here&lt;/a&gt; to create a dummy base image and a task to update it when its reference base updates on Dockerhub.&lt;/p&gt;
+&lt;p&gt;To start, build the base image in ACR:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;ACR_NAME=larrymsvoting
 REPO=&amp;quot;https://larrydevopstest@dev.azure.com/larrydevopstest/AzureVotingApp/_git/AzureVotingApp&amp;quot;
 DOCKER_FILE=&amp;quot;azure-vote/Dockerfile-pythonbase&amp;quot;
+
 az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
---file $DOCKER_FILE $REPO
-&lt;/code>&lt;/pre>&lt;h3 id="step-2-create-a-task">Step 2: Create a task&lt;/h3>
-&lt;pre>&lt;code>az acr task create \
---registry $ACR_NAME \
---name taskpythonbase \
--t baseimages/python-3.6-slim-base:{{.Run.ID}} \
---arg REGISTRY_NAME=$ACR_NAME.azurecr.io \
---context $REPO \
---file Dockerfile-pythonbase \
---commit-trigger-enabled false \
--o table
-&lt;/code>&lt;/pre>&lt;p>Assuming it runs successfully, you&amp;rsquo;ll see output like:&lt;/p>
-&lt;pre>&lt;code>NAME PLATFORM STATUS SOURCE REPOSITORY TRIGGERS
--------------- ---------- -------- ---------------------------------------------------------------------------------------- ----------
-taskpythonbase linux Enabled https://larrydevopstest@dev.azure.com/larrydevopstest/AzureVotingApp/_git/AzureVotingApp BASE_IMAGE
-&lt;/code>&lt;/pre>&lt;h3 id="step-3-logic-app">Step 3: Logic App&lt;/h3>
-&lt;p>Now comes the fun part: getting the base image update to trigger a build in Azure DevOps. We&amp;rsquo;ll start by creating a logic app.
-In the portal, create a logic app and give it a relevant name, eg &amp;lsquo;pythonbasetrigger&amp;rsquo;. In the Logic Apps Designer pane, use &amp;ldquo;When an HTTP Request is Received&amp;rdquo; as the trigger.&lt;/p>
-&lt;p>Add a new step, then type &amp;lsquo;Azure DevOps&amp;rsquo; in the search field, then choose &amp;lsquo;Queue a new build&amp;rsquo; as the action. After authenticating, choose the account name, project name, and build id (eg, pipleline). Once it&amp;rsquo;s saved, it should like like:
-&lt;img src="logicapp.png" alt="logic app">&lt;/p>
-&lt;p>You can test the logic app by pressing &amp;lsquo;Run&amp;rsquo;, which should kick off an Azure DevOps pipeline build.&lt;/p>
-&lt;p>Finally, in your logic apps&amp;rsquo;s first step &amp;lsquo;When an HTTP request is received&amp;rsquo;, find the post URL and copy it, as it will be needed for the next step.&lt;/p>
-&lt;h2 id="step-4-acr-webhook">Step 4: ACR webhook&lt;/h2>
-&lt;p>Next, we&amp;rsquo;ll create an ACR webhook which fires whenever the base image updates.&lt;/p>
-&lt;pre>&lt;code>URI=&amp;lt;webhook post url from prior step&amp;gt;
+    --file $DOCKER_FILE $REPO
+    
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;step-2-create-a-task&#34;&gt;Step 2: Create a task&lt;/h3&gt;
+&lt;pre&gt;&lt;code&gt;az acr task create \
+    --registry $ACR_NAME \
+    --name taskpythonbase \
+    -t baseimages/python-3.6-slim-base:{{.Run.ID}} \
+    --arg REGISTRY_NAME=$ACR_NAME.azurecr.io \
+    --context $REPO \
+    --file Dockerfile-pythonbase \
+    --commit-trigger-enabled false \
+    -o table
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Assuming it runs successfully, you&amp;rsquo;ll see output like:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;NAME            PLATFORM    STATUS    SOURCE REPOSITORY                                                                         TRIGGERS
+--------------  ----------  --------  ----------------------------------------------------------------------------------------  ----------
+taskpythonbase  linux       Enabled   https://larrydevopstest@dev.azure.com/larrydevopstest/AzureVotingApp/_git/AzureVotingApp  BASE_IMAGE
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;step-3-logic-app&#34;&gt;Step 3: Logic App&lt;/h3&gt;
+&lt;p&gt;Now comes the fun part: getting the base image update to trigger a build in Azure DevOps.  We&amp;rsquo;ll start by creating a logic app.
+In the portal, create a logic app and give it a relevant name, eg &amp;lsquo;pythonbasetrigger&amp;rsquo;.  In the Logic Apps Designer pane, use &amp;ldquo;When an HTTP Request is Received&amp;rdquo; as the trigger.&lt;/p&gt;
+&lt;p&gt;Add a new step, then type &amp;lsquo;Azure DevOps&amp;rsquo; in the search field, then choose &amp;lsquo;Queue a new build&amp;rsquo; as the action.  After authenticating, choose the account name, project name, and build id (eg, pipleline).  Once it&amp;rsquo;s saved, it should like like:
+&lt;img src=&#34;logicapp.png&#34; alt=&#34;logic app&#34;&gt;&lt;/p&gt;
+&lt;p&gt;You can test the logic app by pressing &amp;lsquo;Run&amp;rsquo;, which should kick off an Azure DevOps pipeline build.&lt;/p&gt;
+&lt;p&gt;Finally, in your logic apps&amp;rsquo;s first step &amp;lsquo;When an HTTP request is received&amp;rsquo;, find the post URL and copy it, as it will be needed for the next step.&lt;/p&gt;
+&lt;h2 id=&#34;step-4-acr-webhook&#34;&gt;Step 4: ACR webhook&lt;/h2&gt;
+&lt;p&gt;Next, we&amp;rsquo;ll create an ACR webhook which fires whenever the base image updates.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;URI=&amp;lt;webhook post url from prior step&amp;gt;
+
 az acr webhook create -n pythonbasehook -r $ACR_NAME \
---scope baseimages/python-3.6-slim-base \
---actions push --uri $URI
-&lt;/code>&lt;/pre>&lt;h2 id="step-5-enjoy">Step 5: Enjoy!&lt;/h2>
-&lt;p>We&amp;rsquo;ve done it! We now have a set up a set of integrations that does the following:
-&lt;img src="flow.png" alt="flow">&lt;/p>
-&lt;h2 id="step-6-test">Step 6: Test&lt;/h2>
-&lt;p>Since the Dockerhub base image is only going to be updated periodically, you can test your integration by manually running a build in ACR:&lt;/p>
-&lt;pre>&lt;code>az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
---file $DOCKER_FILE $REPO
-&lt;/code>&lt;/pre>&lt;p>If all is working, this should trigger a build in Azure DevOps.&lt;/p>
-&lt;h2 id="final-thoughts">Final Thoughts&lt;/h2>
-&lt;p>An alternative to using a webhook would be to use an Event Grid to trigger the Logic App. This is slightly more work to set up, but it might better if you have a number of different pipelines that want to receive notifications when a base image updates. With a webhook, you&amp;rsquo;d need to set up a trigger for each and every one of them. Eventgrid, having a pubsub architecture, would fan-out one:many more effectively than webhooks.&lt;/p></description></item></channel></rss>
+    --scope baseimages/python-3.6-slim-base \
+    --actions push --uri $URI
+&lt;/code&gt;&lt;/pre&gt;&lt;h2 id=&#34;step-5-enjoy&#34;&gt;Step 5: Enjoy!&lt;/h2&gt;
+&lt;p&gt;We&amp;rsquo;ve done it!  We now have a set up a set of integrations that does the following:
+&lt;img src=&#34;flow.png&#34; alt=&#34;flow&#34;&gt;&lt;/p&gt;
+&lt;h2 id=&#34;step-6-test&#34;&gt;Step 6: Test&lt;/h2&gt;
+&lt;p&gt;Since the Dockerhub base image is only going to be updated periodically, you can test your integration by manually running a build in ACR:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
+    --file $DOCKER_FILE $REPO
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;If all is working, this should trigger a build in Azure DevOps.&lt;/p&gt;
+&lt;h2 id=&#34;final-thoughts&#34;&gt;Final Thoughts&lt;/h2&gt;
+&lt;p&gt;An alternative to using a webhook would be to use an Event Grid to trigger the Logic App.  This is slightly more work to set up, but it might better if you have a number of different pipelines that want to receive notifications when a base image updates.  With a webhook, you&amp;rsquo;d need to set up a trigger for each and every one of them.  Eventgrid, having a pubsub architecture, would fan-out one:many more effectively than webhooks.&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

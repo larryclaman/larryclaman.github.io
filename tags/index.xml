@@ -1,1 +1,51 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Tags on Larry Claman's Blog</title><link>https://larryclaman.github.io/tags/</link><description>Recent content in Tags on Larry Claman's Blog</description><generator>Hugo -- gohugo.io</generator><language>en</language><lastBuildDate>Sun, 15 Nov 2020 20:27:50 -0500</lastBuildDate><atom:link href="https://larryclaman.github.io/tags/index.xml" rel="self" type="application/rss+xml"/><item><title>github</title><link>https://larryclaman.github.io/tags/github/</link><pubDate>Sun, 15 Nov 2020 20:27:50 -0500</pubDate><guid>https://larryclaman.github.io/tags/github/</guid><description/></item><item><title>azure</title><link>https://larryclaman.github.io/tags/azure/</link><pubDate>Tue, 14 Apr 2020 20:16:12 -0400</pubDate><guid>https://larryclaman.github.io/tags/azure/</guid><description/></item><item><title>azure-devops</title><link>https://larryclaman.github.io/tags/azure-devops/</link><pubDate>Sun, 10 Nov 2019 21:42:45 -0500</pubDate><guid>https://larryclaman.github.io/tags/azure-devops/</guid><description/></item><item><title>docker</title><link>https://larryclaman.github.io/tags/docker/</link><pubDate>Sun, 10 Nov 2019 21:42:45 -0500</pubDate><guid>https://larryclaman.github.io/tags/docker/</guid><description/></item></channel></rss>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Tags on Larry Claman&#39;s Blog</title>
+    <link>https://larryclaman.github.io/tags/</link>
+    <description>Recent content in Tags on Larry Claman&#39;s Blog</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en</language>
+    <lastBuildDate>Sun, 15 Nov 2020 20:27:50 -0500</lastBuildDate>
+    
+	<atom:link href="https://larryclaman.github.io/tags/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>github</title>
+      <link>https://larryclaman.github.io/tags/github/</link>
+      <pubDate>Sun, 15 Nov 2020 20:27:50 -0500</pubDate>
+      
+      <guid>https://larryclaman.github.io/tags/github/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>azure</title>
+      <link>https://larryclaman.github.io/tags/azure/</link>
+      <pubDate>Tue, 14 Apr 2020 20:16:12 -0400</pubDate>
+      
+      <guid>https://larryclaman.github.io/tags/azure/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>azure-devops</title>
+      <link>https://larryclaman.github.io/tags/azure-devops/</link>
+      <pubDate>Sun, 10 Nov 2019 21:42:45 -0500</pubDate>
+      
+      <guid>https://larryclaman.github.io/tags/azure-devops/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>docker</title>
+      <link>https://larryclaman.github.io/tags/docker/</link>
+      <pubDate>Sun, 10 Nov 2019 21:42:45 -0500</pubDate>
+      
+      <guid>https://larryclaman.github.io/tags/docker/</guid>
+      <description></description>
+    </item>
+    
+  </channel>
+</rss>
