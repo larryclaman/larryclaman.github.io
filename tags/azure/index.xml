@@ -160,7 +160,9 @@ westus2              [&#39;westcentralus&#39;]
 australiaeast        [&#39;australiasoutheast&#39;]
 [snip]
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;(I&amp;rsquo;m still working on my jmespath ninja skills, so there&amp;rsquo;s still a little cleanup to be done on this table, but it gets the point across.)&lt;/p&gt;
-</description>
+&lt;p&gt;EDIT Feb 2021:  Subsequent to my posting this blog, it appears that you now CAN indeed get the pair info directly from the AZ cli.  Example:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;az account list-locations -o table --query &#39;[].[name,metadata.pairedRegion[].name]&#39;
+&lt;/code&gt;&lt;/pre&gt;</description>
     </item>
     
   </channel>

@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<meta name="generator" content="Hugo 0.78.2" />
+		<meta name="generator" content="Hugo 0.80.0" />
 		<title>Querying for Azure Regional Pairs - Larry Claman&#39;s Blog</title>
 
 		<meta name="description" content="Use the Azure CLI to programmatically query for an Azure Regions pair">
@@ -126,7 +126,9 @@ westus2              ['westcentralus']
 australiaeast        ['australiasoutheast']
 [snip]
 </code></pre><p>(I&rsquo;m still working on my jmespath ninja skills, so there&rsquo;s still a little cleanup to be done on this table, but it gets the point across.)</p>
-
+<p>EDIT Feb 2021:  Subsequent to my posting this blog, it appears that you now CAN indeed get the pair info directly from the AZ cli.  Example:</p>
+<pre><code>az account list-locations -o table --query '[].[name,metadata.pairedRegion[].name]'
+</code></pre>
 </article>
 <nav class="no-print post-nav">
 
