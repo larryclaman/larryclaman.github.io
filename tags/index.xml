@@ -6,10 +6,28 @@
     <description>Recent content in Tags on Larry Claman&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Sun, 15 Nov 2020 20:27:50 -0500</lastBuildDate>
+    <lastBuildDate>Sun, 04 Apr 2021 00:00:00 +0000</lastBuildDate>
     
 	<atom:link href="https://larryclaman.github.io/tags/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>aks</title>
+      <link>https://larryclaman.github.io/tags/aks/</link>
+      <pubDate>Sun, 04 Apr 2021 00:00:00 +0000</pubDate>
+      
+      <guid>https://larryclaman.github.io/tags/aks/</guid>
+      <description></description>
+    </item>
+    
+    <item>
+      <title>azure</title>
+      <link>https://larryclaman.github.io/tags/azure/</link>
+      <pubDate>Sun, 04 Apr 2021 00:00:00 +0000</pubDate>
+      
+      <guid>https://larryclaman.github.io/tags/azure/</guid>
+      <description></description>
+    </item>
     
     <item>
       <title>github</title>
@@ -17,15 +35,6 @@
       <pubDate>Sun, 15 Nov 2020 20:27:50 -0500</pubDate>
       
       <guid>https://larryclaman.github.io/tags/github/</guid>
-      <description></description>
-    </item>
-    
-    <item>
-      <title>azure</title>
-      <link>https://larryclaman.github.io/tags/azure/</link>
-      <pubDate>Tue, 14 Apr 2020 20:16:12 -0400</pubDate>
-      
-      <guid>https://larryclaman.github.io/tags/azure/</guid>
       <description></description>
     </item>
     

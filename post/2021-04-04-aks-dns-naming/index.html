@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<meta name="generator" content="Hugo 0.82.0" />
+		<title>Easily create DNS names with Azure Kubernetes Service - Larry Claman&#39;s Blog</title>
+
+		<meta name="description" content="You can easily create a DNS name for an external service in AKS">
+
+
+		
+	
+		
+
+
+
+
+<link rel="stylesheet" href="/css/ui.css">
+
+	
+		
+
+		<link  rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Mono|Lato|Raleway">
+
+		
+		<script type="text/javascript">
+			(function(c,l,a,r,i,t,y){
+				c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+				t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+				y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+			})(window, document, "clarity", "script", "44j7jjbeip");
+		</script>
+			
+
+		
+	</head>
+
+<body>
+<header class="container no-print">
+	<div class="u-header">
+		<nav class="bar">
+	<ul><li>
+			<a href="/">
+				<img class="icon-text" src="/img/prev.svg"/>
+			</a>
+		</li><li><a href="/">Blog</a></li></ul>
+</nav>
+
+	</div>
+</header>
+<main class="container">
+
+<article>
+	<header><hgroup id="brand">
+	<h1>Easily create DNS names with Azure Kubernetes Service</h1>
+	<h5>
+		
+		<time datetime="2021-04-04 00:00:00 &#43;0000 UTC">Apr 04, 2021</time>
+		<span class="no-print">
+			-
+				
+				<a href="/tags/azure">azure</a>
+				
+				<a href="/tags/aks">aks</a>
+				<span>
+	</h5>
+	
+</hgroup>
+<hr class="sep" />
+</header>
+	<p>When working with Azure Kubernetes Service (AKS), there are lots and lots of <a href="https://docs.microsoft.com/en-us/azure/aks/tutorial-kubernetes-deploy-application">examples</a> of how
+to create a loadbalancer service with public IP address.  Most, if not all, of these examples recommend that you access the service by IP address rather than by using a DNS name.</p>
+<p>I was recently leading a workshop which covered this topic, and I wondered if there was an easy way to get AKS to assign a DNS name for a loadbalancer service.  It turns out, there is, but it&rsquo;s not documented well and is hidden within the AKS documentation.</p>
+<p>The method is documented on <a href="https://docs.microsoft.com/en-us/azure/aks/static-ip#apply-a-dns-label-to-the-service">this page</a>, and it&rsquo;s actually pretty straightforward to use.  The trick is to set the following metadata annotation on your service:</p>
+<pre><code>metadata:
+  annotations:
+    service.beta.kubernetes.io/azure-dns-label-name: yourchosendnsname
+</code></pre><p>By using this annotation, AKS will create a DNS record of the form <code>[yourchosendnsname].[location].cloudapp.azure.com</code>.</p>
+<h3 id="walk-through">Walk-Through</h3>
+<p>Let&rsquo;s walk through an example by deploying the sample &lsquo;Azure Voting App&rsquo; from the <a href="https://github.com/Azure-Samples/azure-voting-app-redis/blob/master/azure-vote-all-in-one-redis.yaml">Azure Documentation</a>:</p>
+<pre><code>kubectl apply -f https://raw.githubusercontent.com/Azure-Samples/azure-voting-app-redis/master/azure-vote-all-in-one-redis.yaml
+ 
+kubectl get services
+NAME               TYPE           CLUSTER-IP     EXTERNAL-IP    PORT(S)        AGE
+azure-vote-back    ClusterIP      10.0.73.110    &lt;none&gt;         6379/TCP       7s
+azure-vote-front   LoadBalancer   10.0.135.119   52.251.9.116   80:30118/TCP   7s
+kubernetes         ClusterIP      10.0.0.1       &lt;none&gt;         443/TCP        10m
+</code></pre><p>As expected, the azure-vote-front service is available via a public IP.  Now, let&rsquo;s modify the service definition to use the annotation; I&rsquo;m going to use the label <strong>larryvote</strong>, which should create the dns record larryvote.eastus2.cloudapp.com:</p>
+<pre><code>kubectl apply -f - &lt;&lt;EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: azure-vote-front
+  annotations:
+    service.beta.kubernetes.io/azure-dns-label-name: larryvote
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+  selector:
+    app: azure-vote-front
+EOF
+</code></pre><p>Let&rsquo;s check to see if it worked:</p>
+<pre><code>&gt; nslookup larryvote.eastus2.cloudapp.azure.com
+
+Non-authoritative answer:
+Name:   larryvote.eastus2.cloudapp.azure.com
+Address: 52.251.9.116
+</code></pre><p>Yep, it worked!   You next thought may be, &ldquo;That&rsquo;s great, but I don&rsquo;t want to use that ugly domain name.  How can I use my own domain name?&rdquo;  The solution to this is also straightforward: use a CNAME.</p>
+<h3 id="using-a-cname">Using a CNAME</h3>
+<p>In my case, I own the domain <strong>claman.org</strong>.  So I simply need to create a cname for larryvote.claman.org pointing to larryvote.eastus2.cloudapp.azure.com.  Let&rsquo;s check what that looks like:</p>
+<pre><code>&gt; nslookup larryvote.claman.org
+
+Non-authoritative answer:
+larryvote.claman.org    canonical name = larryvote.eastus2.cloudapp.azure.com.
+Name:   larryvote.eastus2.cloudapp.azure.com
+Address: 52.251.9.116
+</code></pre><p>Easy Peasy!  Of course you can access the web page via this name:
+<img src="webpage.png" alt="web page"></p>
+<h3 id="dns-labels-for-nginx-ingress">DNS Labels for Nginx Ingress</h3>
+<p>Suppose you want to use an nginx ingress rather than a load balancer service?  You can use this same method, but it&rsquo;s slightly more complicated.  Again, it&rsquo;s documented, but not well, on <a href="https://docs.microsoft.com/en-us/azure/aks/ingress-static-ip">this page</a>.  Specifically, you need to set <code>controller.service.annotations.&quot;service\.beta\.kubernetes\.io/azure-dns-label-name&quot;=&quot;yourdnslabel&quot;</code>, where <em>yourdnslabel</em> is the dns name you want to use.</p>
+
+</article>
+<nav class="no-print post-nav">
+
+	<a class="prev-post" href="https://larryclaman.github.io/post/2020-11-15-dependabot/">
+		<img class="icon-text" src="/img/prev.svg"/>Create Issues Automatically with Dependabot</a>
+
+
+</nav>
+
+
+<section id="related">
+  <h4>See Also</h4>
+  <ul>
+    
+  	<li><a href="/post/2020-04-14-azure-spot/">Converting an Azure VM to a Spot type</a></li>
+  	
+  	<li><a href="/post/2020-04-09-querying-for-azure-regional-pairs/">Querying for Azure Regional Pairs</a></li>
+  	
+  </ul>
+</section>
+
+
+
+
+	<div id="disqus_thread" class="no-print"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'larryclamanblog';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+
+
+			<hr class="sep" />
+		</main>
+		<footer class="container no-print">
+			<div class="u-footer">
+				
+
+<a href="https://github.com/larryclaman/"><img class="icon-social" src="/img/github.svg" alt="Github"/></a>
+
+
+<a href="https://larryclaman.github.io/index.xml" target="_blank"><img class="icon-social" src="/img/feed.svg" alt="Feed"></a>
+
+				<p>
+					
+					
+					
+				</p>
+				
+				<a href="#brand">
+					<img class="icon-text" src="/img/toup.svg" alt="To Up"/>
+					<span>Back to Top</span>
+				</a>
+				
+			</div>
+		</footer>
+		
+	
+
+</body>
+</html>
+
