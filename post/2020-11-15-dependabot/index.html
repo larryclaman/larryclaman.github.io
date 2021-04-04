@@ -67,8 +67,8 @@
 </hgroup>
 <hr class="sep" />
 </header>
-	<p>I recently coached a DevOps hackathon where one of the sucess critera was &ldquo;Every PR must have an associated Issue&rdquo;.  This is easy to enforce in Azure DevOps, and while it can&rsquo;t be currently enforced in GitHub, it&rsquo;s possible to use <a href="https://github.com/hattan/verify-linked-issue-action/">this</a> GitHub Action to verify that all pull requests in your repo contain a reference to an issue.</p>
-<p>All fine and good, except that when I turned on Dependabot for my repo, I realized that Dependabot only creates pull requests, but it does not create issues, which doesn&rsquo;t meet my sucess criteria.  Well, GitHub workflows to the rescue!  The following workflow will create an issue whenever Dependabot opens a PR:</p>
+	<p>I recently coached a DevOps hackathon where one of the success criteria was &ldquo;Every PR must have an associated Issue&rdquo;.  This is easy to enforce in Azure DevOps, and while it can&rsquo;t be currently enforced in GitHub, it&rsquo;s possible to use <a href="https://github.com/hattan/verify-linked-issue-action/">this</a> GitHub Action to verify that all pull requests in your repo contain a reference to an issue.</p>
+<p>All fine and good, except that when I turned on Dependabot for my repo, I realized that Dependabot only creates pull requests, but it does not create issues, which doesn&rsquo;t meet my success criteria.  Well, GitHub workflows to the rescue!  The following workflow will create an issue whenever Dependabot opens a PR:</p>
 <pre><code>name: CreateDependabotIssue
 on:
   workflow_dispatch:
