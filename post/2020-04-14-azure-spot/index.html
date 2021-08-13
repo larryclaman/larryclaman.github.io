@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<meta name="generator" content="Hugo 0.82.0" />
+		<meta name="generator" content="Hugo 0.87.0" />
 		<title>Converting an Azure VM to a Spot type - Larry Claman&#39;s Blog</title>
 
 		<meta name="description" content="Convert an Azure VM to a Spot type using a PowerShell script">
@@ -70,7 +70,7 @@
 	<p>The Azure team recently announced support for <a href="https://azure.microsoft.com/en-us/blog/announcing-the-preview-of-azure-spot-virtual-machines/">Spot Virtual Machines</a>.  In case you&rsquo;re not familiar, <em>&ldquo;Azure Spot Virtual Machines provide access to unused Azure compute capacity at deep discounts.&quot;</em>  The tradeoff is, a Spot VM can be evicted at any time.</p>
 <p>Currently, there&rsquo;s no way to dynamically change an existing VM type to become a Spot.  However, using PowerShell, you can perform some &lsquo;magic&rsquo; to reprovision an existing VM as a new Spot instance.</p>
 <p>Here&rsquo;s the script I put together:</p>
-<div class="highlight"><pre class="chroma"><code class="language-powershell" data-lang="powershell"><span class="cm">&lt;# Convert a VM to a Spot VM
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="cm">&lt;# Convert a VM to a Spot VM
 </span><span class="cm">Based on sample script at https://docs.microsoft.com/en-us/azure/virtual-machines/windows/change-availability-set
 </span><span class="cm">NOTE:  Extensions will not be copied to new instance!!
 </span><span class="cm">#&gt;</span>
