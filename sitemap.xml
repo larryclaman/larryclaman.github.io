@@ -2,22 +2,31 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
+    <loc>https://larryclaman.github.io/tags/azure/</loc>
+    <lastmod>2021-08-19T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://larryclaman.github.io/post/2021-08-19-21-bicep-uami/</loc>
+    <lastmod>2021-08-19T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://larryclaman.github.io/tags/bicep/</loc>
+    <lastmod>2021-08-19T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://larryclaman.github.io/tags/identity/</loc>
+    <lastmod>2021-08-19T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://larryclaman.github.io/</loc>
+    <lastmod>2021-08-19T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://larryclaman.github.io/post/</loc>
+    <lastmod>2021-08-19T00:00:00+00:00</lastmod>
+  </url><url>
+    <loc>https://larryclaman.github.io/tags/</loc>
+    <lastmod>2021-08-19T00:00:00+00:00</lastmod>
+  </url><url>
     <loc>https://larryclaman.github.io/tags/aks/</loc>
     <lastmod>2021-04-04T00:00:00+00:00</lastmod>
   </url><url>
-    <loc>https://larryclaman.github.io/tags/azure/</loc>
-    <lastmod>2021-04-04T00:00:00+00:00</lastmod>
-  </url><url>
     <loc>https://larryclaman.github.io/post/2021-04-04-aks-dns-naming/</loc>
-    <lastmod>2021-04-04T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://larryclaman.github.io/</loc>
-    <lastmod>2021-04-04T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://larryclaman.github.io/post/</loc>
-    <lastmod>2021-04-04T00:00:00+00:00</lastmod>
-  </url><url>
-    <loc>https://larryclaman.github.io/tags/</loc>
     <lastmod>2021-04-04T00:00:00+00:00</lastmod>
   </url><url>
     <loc>https://larryclaman.github.io/post/2020-11-15-dependabot/</loc>

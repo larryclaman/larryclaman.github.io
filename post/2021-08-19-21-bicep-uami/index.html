@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<meta name="generator" content="Hugo 0.87.0" />
+		<title>Azure Bicep &amp; User Assigned Managed Identity - Larry Claman&#39;s Blog</title>
+
+		<meta name="description" content="This will be a quick one!
+A colleague asked me if it was easier to use user assigned managed identities in Bicep versus ARM. Well, challenge accepted!
+After about 45 minutes of hacking, I created the following:
+@description(&#39;Web app name.&#39;) @minLength(2) param webAppName string = &#39;webApp-${uniqueString(resourceGroup().id)}&#39; @description(&#39;Location for all resources.&#39;) param location string = resourceGroup().location @description(&#39;The SKU of App Service Plan.&#39;) param sku string = &#39;S1&#39; @description(&#39;The Runtime stack of current web app&#39;) param linuxFxVersion string = &#39;DOTNETCORE|5.">
+
+
+		
+	
+		
+
+
+
+
+<link rel="stylesheet" href="/css/ui.css">
+
+	
+		
+
+		<link  rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Mono|Lato|Raleway">
+
+		
+		<script type="text/javascript">
+			(function(c,l,a,r,i,t,y){
+				c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+				t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+				y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+			})(window, document, "clarity", "script", "44j7jjbeip");
+		</script>
+			
+
+		
+	</head>
+
+<body>
+<header class="container no-print">
+	<div class="u-header">
+		<nav class="bar">
+	<ul><li>
+			<a href="/">
+				<img class="icon-text" src="/img/prev.svg"/>
+			</a>
+		</li><li><a href="/">Blog</a></li></ul>
+</nav>
+
+	</div>
+</header>
+<main class="container">
+
+<article>
+	<header><hgroup id="brand">
+	<h1>Azure Bicep &amp; User Assigned Managed Identity</h1>
+	<h5>
+		
+		<time datetime="2021-08-19 00:00:00 &#43;0000 UTC">Aug 19, 2021</time>
+		<span class="no-print">
+			-
+				
+				<a href="/tags/azure">azure</a>
+				
+				<a href="/tags/bicep">bicep</a>
+				
+				<a href="/tags/identity">identity</a>
+				<span>
+	</h5>
+	
+</hgroup>
+<hr class="sep" />
+</header>
+	<p>This will be a quick one!</p>
+<p>A colleague asked me if it was easier to use <a href="https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview">user assigned managed identities</a> in Bicep versus ARM.  Well, challenge accepted!</p>
+<p>After about 45 minutes of hacking, I created the following:</p>
+<pre><code>@description('Web app name.')
+@minLength(2)
+param webAppName string = 'webApp-${uniqueString(resourceGroup().id)}'
+
+@description('Location for all resources.')
+param location string = resourceGroup().location
+
+@description('The SKU of App Service Plan.')
+param sku string = 'S1'
+
+@description('The Runtime stack of current web app')
+param linuxFxVersion string = 'DOTNETCORE|5.0'
+
+param uaminame string = 'uamitest'
+
+param kvName string = 'kv-${uniqueString(resourceGroup().id)}'
+
+@secure()
+param secretValue string = 'P@ssword.12345' // yes, this is NOT good practice!  Don't do this in production!
+
+var appServicePlanPortalName_var = '${webAppName}-plan'
+
+resource appServicePlanName 'Microsoft.Web/serverfarms@2020-06-01' = {
+  name: appServicePlanPortalName_var
+  location: location
+  sku: {
+    name: sku
+  }
+  kind: 'linux'
+  properties: {
+    reserved: true
+  }
+}
+
+resource webApp_resource 'Microsoft.Web/sites@2020-12-01' = {
+  name: webAppName
+  location: location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${uami.id}': {}
+    }
+  }
+  properties: {
+    serverFarmId: appServicePlanName.id
+    siteConfig: {
+      linuxFxVersion: linuxFxVersion
+    }
+    keyVaultReferenceIdentity: uami.id
+  }
+
+  resource settings 'config' = {
+    name: 'appsettings'
+    properties: {
+      //SuperSecret: '@Microsoft.KeyVault(SecretUri=${keyVault::secret.properties.secretUriWithVersion})'
+      SuperSecret: '@Microsoft.KeyVault(SecretUri=${keyVault::secret.properties.secretUri})'
+    }
+  }
+}
+
+resource webAppSlot 'Microsoft.Web/sites/slots@2020-06-01' = {
+  name: '${webAppName}/staging'
+  location: location
+  kind: 'app'
+  properties: {
+    serverFarmId: appServicePlanPortalName_var
+  }
+  dependsOn: [
+    webApp_resource
+  ]
+}
+
+// Create a keyvault, and use a nested resource to set a secret
+resource keyVault 'Microsoft.KeyVault/vaults@2019-09-01' = {
+  name: kvName
+  location: resourceGroup().location
+  properties: {
+    enabledForDeployment: false
+    enabledForTemplateDeployment: false
+    enabledForDiskEncryption: false
+    tenantId: subscription().tenantId
+    enablePurgeProtection: false
+    accessPolicies: [
+      {
+        tenantId: subscription().tenantId
+        objectId: uami.properties.principalId
+        permissions: {
+          keys: [
+            'get'
+          ]
+          secrets: [
+            'list'
+            'get'
+          ]
+        }
+      }
+    ]
+    sku: {
+      name: 'standard'
+      family: 'A'
+    }
+  }
+
+  resource secret 'secrets' = {
+    name: 'mysecret'
+    properties: {
+      value: secretValue
+    }
+  }
+  dependsOn: [
+    uami
+  ]
+}
+
+// create user assigned managed identity
+resource uami 'Microsoft.ManagedIdentity/userAssignedIdentities@2018-11-30' = {
+  name: uaminame
+  location: resourceGroup().location
+}
+
+// create role assignment
+var KEY_VAULT_SECRETS_USER_ROLE_GUID = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+
+resource keyVaultWebsiteUser 'Microsoft.Authorization/roleAssignments@2020-04-01-preview' = {
+  name: guid('SecretsUser', webAppName)
+  scope: keyVault
+  properties: {
+    principalId: uami.properties.principalId
+    roleDefinitionId: KEY_VAULT_SECRETS_USER_ROLE_GUID
+  }
+}
+</code></pre><p>Key things to point out here with the web app config:</p>
+<ul>
+<li>The set of lines
+<pre><code>userAssignedIdentities: {
+    '${uami.id}': {}
+    }
+</code></pre><p>are where you associate the user-assigned identity id with the web app</p>
+</li>
+<li>You also need the line <code>keyVaultReferenceIdentity: uami.id</code> to tell the app service which identity to use when contacting the key vault</li>
+</ul>
+<p>Cool stuff!</p>
+
+</article>
+<nav class="no-print post-nav">
+
+	<a class="prev-post" href="https://larryclaman.github.io/post/2021-04-04-aks-dns-naming/">
+		<img class="icon-text" src="/img/prev.svg"/>Easily create DNS names with Azure Kubernetes Service</a>
+
+
+</nav>
+
+
+<section id="related">
+  <h4>See Also</h4>
+  <ul>
+    
+  	<li><a href="/post/2021-04-04-aks-dns-naming/">Easily create DNS names with Azure Kubernetes Service</a></li>
+  	
+  	<li><a href="/post/2020-04-14-azure-spot/">Converting an Azure VM to a Spot type</a></li>
+  	
+  	<li><a href="/post/2020-04-09-querying-for-azure-regional-pairs/">Querying for Azure Regional Pairs</a></li>
+  	
+  </ul>
+</section>
+
+
+
+
+	<div id="disqus_thread" class="no-print"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'larryclamanblog';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+
+
+			<hr class="sep" />
+		</main>
+		<footer class="container no-print">
+			<div class="u-footer">
+				
+
+<a href="https://github.com/larryclaman/"><img class="icon-social" src="/img/github.svg" alt="Github"/></a>
+
+
+<a href="https://larryclaman.github.io/index.xml" target="_blank"><img class="icon-social" src="/img/feed.svg" alt="Feed"></a>
+
+				<p>
+					
+					
+					
+				</p>
+				
+				<a href="#brand">
+					<img class="icon-text" src="/img/toup.svg" alt="To Up"/>
+					<span>Back to Top</span>
+				</a>
+				
+			</div>
+		</footer>
+		
+	
+
+</body>
+</html>
+
