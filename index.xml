@@ -38,7 +38,7 @@ param uaminame string = &#39;uamitest&#39;
 param kvName string = &#39;kv-${uniqueString(resourceGroup().id)}&#39;
 
 @secure()
-param secretValue string = &#39;P@ssword.12345&#39; // yes, this is NOT good practice!  Don&#39;t do this in production!
+param secretValue string = uniqueString(newGuid())
 
 var appServicePlanPortalName_var = &#39;${webAppName}-plan&#39;
 
