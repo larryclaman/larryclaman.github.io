@@ -117,14 +117,16 @@ spec:
       connectionFromEnv: AzureWebJobsStorage
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Deploy this as follows:&lt;/p&gt;
 &lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;cat azurequeue_scaledobject_jobs_windows.yaml| envsubst | kubectl apply -f -
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;And finally, run the python app to load up the queue with work:&lt;/p&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Notice in the above that I&amp;rsquo;m using the tool &lt;code&gt;envsubst&lt;/code&gt; to dynamically insert the value of the $ACR environment variable into the manifest.&lt;/p&gt;
+&lt;p&gt;And finally, run the python app to load up the queue with work (100 messages):&lt;/p&gt;
 &lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;python3 -m venv .venv # only run once
 source .venv/bin/activate
 pip install -r requirements.txt # only run once
 
 python send_messages.py 100 # adds 100 messages into the queue
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;At this point, KEDA will create up to &lt;em&gt;MaxReplicaCount&lt;/em&gt; jobs (50, per our configuration) to process the messages which have been placed in the storage queue.  As each job will consume 2Gb of memory, very quickly the jobs will not be schedulable, and the Cluster Autoscaler will kick in to scale out the cluster.  As jobs complete, KEDA will schedule new ones until it runs out of work (eg, the queue is empty)&lt;/p&gt;
-&lt;p&gt;In the next blog post, we&amp;rsquo;ll cover some additional tweaking that can be added to this configuration in support of long running jobs.&lt;/p&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;At this point, KEDA will create up to &lt;em&gt;MaxReplicaCount&lt;/em&gt; jobs (50, per our configuration) to process the messages which have been placed in the storage queue.  As each job will consume 2Gb of memory, very quickly the jobs will not be schedulable, and the Cluster Autoscaler will kick in to scale out the cluster.  As jobs complete, KEDA will schedule new ones until it runs out of work (eg, the queue is empty).  You can watch jobs being automatically scheduled using the command:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;kubectl get jobs
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;In the next blog post, we&amp;rsquo;ll cover some additional tweaking that can be added to this configuration in support of long running jobs.&lt;/p&gt;
 &lt;h2 id=&#34;code-samples&#34;&gt;Code Samples&lt;/h2&gt;
 &lt;h3 id=&#34;queue-consumer&#34;&gt;Queue Consumer&lt;/h3&gt;
 &lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;import os

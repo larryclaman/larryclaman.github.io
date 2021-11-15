@@ -173,14 +173,16 @@ spec:
       connectionFromEnv: AzureWebJobsStorage
 </code></pre><p>Deploy this as follows:</p>
 <pre tabindex="0"><code>cat azurequeue_scaledobject_jobs_windows.yaml| envsubst | kubectl apply -f -
-</code></pre><p>And finally, run the python app to load up the queue with work:</p>
+</code></pre><p>Notice in the above that I&rsquo;m using the tool <code>envsubst</code> to dynamically insert the value of the $ACR environment variable into the manifest.</p>
+<p>And finally, run the python app to load up the queue with work (100 messages):</p>
 <pre tabindex="0"><code>python3 -m venv .venv # only run once
 source .venv/bin/activate
 pip install -r requirements.txt # only run once
 
 python send_messages.py 100 # adds 100 messages into the queue
-</code></pre><p>At this point, KEDA will create up to <em>MaxReplicaCount</em> jobs (50, per our configuration) to process the messages which have been placed in the storage queue.  As each job will consume 2Gb of memory, very quickly the jobs will not be schedulable, and the Cluster Autoscaler will kick in to scale out the cluster.  As jobs complete, KEDA will schedule new ones until it runs out of work (eg, the queue is empty)</p>
-<p>In the next blog post, we&rsquo;ll cover some additional tweaking that can be added to this configuration in support of long running jobs.</p>
+</code></pre><p>At this point, KEDA will create up to <em>MaxReplicaCount</em> jobs (50, per our configuration) to process the messages which have been placed in the storage queue.  As each job will consume 2Gb of memory, very quickly the jobs will not be schedulable, and the Cluster Autoscaler will kick in to scale out the cluster.  As jobs complete, KEDA will schedule new ones until it runs out of work (eg, the queue is empty).  You can watch jobs being automatically scheduled using the command:</p>
+<pre tabindex="0"><code>kubectl get jobs
+</code></pre><p>In the next blog post, we&rsquo;ll cover some additional tweaking that can be added to this configuration in support of long running jobs.</p>
 <h2 id="code-samples">Code Samples</h2>
 <h3 id="queue-consumer">Queue Consumer</h3>
 <pre tabindex="0"><code>import os
