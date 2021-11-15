@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<meta name="generator" content="Hugo 0.87.0" />
+		<meta name="generator" content="Hugo 0.89.2" />
 		<title>Easily create DNS names with Azure Kubernetes Service - Larry Claman&#39;s Blog</title>
 
 		<meta name="description" content="Use a custom DNS name with a loadbalancer service in AKS.  No more ugly IPs!">
@@ -73,13 +73,13 @@
 to create a loadbalancer service with public IP address.  Most, if not all, of these examples recommend that you access the service by IP address rather than by using a DNS name.</p>
 <p>I was recently leading a workshop which covered this topic, and I wondered if there was an easy way to get AKS to assign a DNS name for a loadbalancer service.  It turns out, there is, but it&rsquo;s not documented well and is hidden within the AKS documentation.</p>
 <p>The method is documented on <a href="https://docs.microsoft.com/en-us/azure/aks/static-ip#apply-a-dns-label-to-the-service">this page</a>, and it&rsquo;s actually pretty straightforward to use.  The trick is to set the following metadata annotation on your service:</p>
-<pre><code>metadata:
+<pre tabindex="0"><code>metadata:
   annotations:
     service.beta.kubernetes.io/azure-dns-label-name: yourchosendnsname
 </code></pre><p>By using this annotation, AKS will create a DNS record of the form <code>[yourchosendnsname].[location].cloudapp.azure.com</code>.</p>
 <h3 id="walk-through">Walk-Through</h3>
 <p>Let&rsquo;s walk through an example by deploying the sample &lsquo;Azure Voting App&rsquo; from the <a href="https://github.com/Azure-Samples/azure-voting-app-redis/blob/master/azure-vote-all-in-one-redis.yaml">Azure Documentation</a>:</p>
-<pre><code>kubectl apply -f https://raw.githubusercontent.com/Azure-Samples/azure-voting-app-redis/master/azure-vote-all-in-one-redis.yaml
+<pre tabindex="0"><code>kubectl apply -f https://raw.githubusercontent.com/Azure-Samples/azure-voting-app-redis/master/azure-vote-all-in-one-redis.yaml
  
 kubectl get services
 NAME               TYPE           CLUSTER-IP     EXTERNAL-IP    PORT(S)        AGE
@@ -87,7 +87,7 @@ azure-vote-back    ClusterIP      10.0.73.110    &lt;none&gt;         6379/TCP  
 azure-vote-front   LoadBalancer   10.0.135.119   52.251.9.116   80:30118/TCP   7s
 kubernetes         ClusterIP      10.0.0.1       &lt;none&gt;         443/TCP        10m
 </code></pre><p>As expected, the azure-vote-front service is available via a public IP.  Now, let&rsquo;s modify the service definition to use the annotation; I&rsquo;m going to use the label <strong>larryvote</strong>, which should create the dns record larryvote.eastus2.cloudapp.com:</p>
-<pre><code>kubectl apply -f - &lt;&lt;EOF
+<pre tabindex="0"><code>kubectl apply -f - &lt;&lt;EOF
 apiVersion: v1
 kind: Service
 metadata:
@@ -102,7 +102,7 @@ spec:
     app: azure-vote-front
 EOF
 </code></pre><p>Let&rsquo;s check to see if it worked:</p>
-<pre><code>&gt; nslookup larryvote.eastus2.cloudapp.azure.com
+<pre tabindex="0"><code>&gt; nslookup larryvote.eastus2.cloudapp.azure.com
 
 Non-authoritative answer:
 Name:   larryvote.eastus2.cloudapp.azure.com
@@ -110,7 +110,7 @@ Address: 52.251.9.116
 </code></pre><p>Yep, it worked!   You next thought may be, &ldquo;That&rsquo;s great, but I don&rsquo;t want to use that ugly domain name.  How can I use my own domain name?&rdquo;  The solution to this is also straightforward: use a CNAME.</p>
 <h3 id="using-a-cname">Using a CNAME</h3>
 <p>In my case, I own the domain <strong>claman.org</strong>.  So I simply need to create a cname for larryvote.claman.org pointing to larryvote.eastus2.cloudapp.azure.com.  Let&rsquo;s check what that looks like:</p>
-<pre><code>&gt; nslookup larryvote.claman.org
+<pre tabindex="0"><code>&gt; nslookup larryvote.claman.org
 
 Non-authoritative answer:
 larryvote.claman.org    canonical name = larryvote.eastus2.cloudapp.azure.com.

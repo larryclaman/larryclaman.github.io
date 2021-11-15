@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
-    <title>aks on Larry Claman&#39;s Blog</title>
-    <link>https://larryclaman.github.io/tags/aks/</link>
-    <description>Recent content in aks on Larry Claman&#39;s Blog</description>
+    <title>keda on Larry Claman&#39;s Blog</title>
+    <link>https://larryclaman.github.io/tags/keda/</link>
+    <description>Recent content in keda on Larry Claman&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
     <lastBuildDate>Sun, 14 Nov 2021 18:33:31 -0500</lastBuildDate>
     
-	<atom:link href="https://larryclaman.github.io/tags/aks/index.xml" rel="self" type="application/rss+xml" />
+	<atom:link href="https://larryclaman.github.io/tags/keda/index.xml" rel="self" type="application/rss+xml" />
     
     
     <item>
@@ -177,66 +177,6 @@ for message in range(0, int(sys.argv[1])):
   queue.send_message(content=&#39;foo_&#39;+str(message))
 
 &lt;/code&gt;&lt;/pre&gt;</description>
-    </item>
-    
-    <item>
-      <title>Easily create DNS names with Azure Kubernetes Service</title>
-      <link>https://larryclaman.github.io/post/2021-04-04-aks-dns-naming/</link>
-      <pubDate>Sun, 04 Apr 2021 00:00:00 +0000</pubDate>
-      
-      <guid>https://larryclaman.github.io/post/2021-04-04-aks-dns-naming/</guid>
-      <description>&lt;p&gt;When working with Azure Kubernetes Service (AKS), there are lots and lots of &lt;a href=&#34;https://docs.microsoft.com/en-us/azure/aks/tutorial-kubernetes-deploy-application&#34;&gt;examples&lt;/a&gt; of how
-to create a loadbalancer service with public IP address.  Most, if not all, of these examples recommend that you access the service by IP address rather than by using a DNS name.&lt;/p&gt;
-&lt;p&gt;I was recently leading a workshop which covered this topic, and I wondered if there was an easy way to get AKS to assign a DNS name for a loadbalancer service.  It turns out, there is, but it&amp;rsquo;s not documented well and is hidden within the AKS documentation.&lt;/p&gt;
-&lt;p&gt;The method is documented on &lt;a href=&#34;https://docs.microsoft.com/en-us/azure/aks/static-ip#apply-a-dns-label-to-the-service&#34;&gt;this page&lt;/a&gt;, and it&amp;rsquo;s actually pretty straightforward to use.  The trick is to set the following metadata annotation on your service:&lt;/p&gt;
-&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;metadata:
-  annotations:
-    service.beta.kubernetes.io/azure-dns-label-name: yourchosendnsname
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;By using this annotation, AKS will create a DNS record of the form &lt;code&gt;[yourchosendnsname].[location].cloudapp.azure.com&lt;/code&gt;.&lt;/p&gt;
-&lt;h3 id=&#34;walk-through&#34;&gt;Walk-Through&lt;/h3&gt;
-&lt;p&gt;Let&amp;rsquo;s walk through an example by deploying the sample &amp;lsquo;Azure Voting App&amp;rsquo; from the &lt;a href=&#34;https://github.com/Azure-Samples/azure-voting-app-redis/blob/master/azure-vote-all-in-one-redis.yaml&#34;&gt;Azure Documentation&lt;/a&gt;:&lt;/p&gt;
-&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;kubectl apply -f https://raw.githubusercontent.com/Azure-Samples/azure-voting-app-redis/master/azure-vote-all-in-one-redis.yaml
- 
-kubectl get services
-NAME               TYPE           CLUSTER-IP     EXTERNAL-IP    PORT(S)        AGE
-azure-vote-back    ClusterIP      10.0.73.110    &amp;lt;none&amp;gt;         6379/TCP       7s
-azure-vote-front   LoadBalancer   10.0.135.119   52.251.9.116   80:30118/TCP   7s
-kubernetes         ClusterIP      10.0.0.1       &amp;lt;none&amp;gt;         443/TCP        10m
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;As expected, the azure-vote-front service is available via a public IP.  Now, let&amp;rsquo;s modify the service definition to use the annotation; I&amp;rsquo;m going to use the label &lt;strong&gt;larryvote&lt;/strong&gt;, which should create the dns record larryvote.eastus2.cloudapp.com:&lt;/p&gt;
-&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;kubectl apply -f - &amp;lt;&amp;lt;EOF
-apiVersion: v1
-kind: Service
-metadata:
-  name: azure-vote-front
-  annotations:
-    service.beta.kubernetes.io/azure-dns-label-name: larryvote
-spec:
-  type: LoadBalancer
-  ports:
-  - port: 80
-  selector:
-    app: azure-vote-front
-EOF
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Let&amp;rsquo;s check to see if it worked:&lt;/p&gt;
-&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;&amp;gt; nslookup larryvote.eastus2.cloudapp.azure.com
-
-Non-authoritative answer:
-Name:   larryvote.eastus2.cloudapp.azure.com
-Address: 52.251.9.116
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Yep, it worked!   You next thought may be, &amp;ldquo;That&amp;rsquo;s great, but I don&amp;rsquo;t want to use that ugly domain name.  How can I use my own domain name?&amp;rdquo;  The solution to this is also straightforward: use a CNAME.&lt;/p&gt;
-&lt;h3 id=&#34;using-a-cname&#34;&gt;Using a CNAME&lt;/h3&gt;
-&lt;p&gt;In my case, I own the domain &lt;strong&gt;claman.org&lt;/strong&gt;.  So I simply need to create a cname for larryvote.claman.org pointing to larryvote.eastus2.cloudapp.azure.com.  Let&amp;rsquo;s check what that looks like:&lt;/p&gt;
-&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;&amp;gt; nslookup larryvote.claman.org
-
-Non-authoritative answer:
-larryvote.claman.org    canonical name = larryvote.eastus2.cloudapp.azure.com.
-Name:   larryvote.eastus2.cloudapp.azure.com
-Address: 52.251.9.116
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Easy Peasy!  Of course you can access the web page via this name:
-&lt;img src=&#34;webpage.png&#34; alt=&#34;web page&#34;&gt;&lt;/p&gt;
-&lt;h3 id=&#34;dns-labels-for-nginx-ingress&#34;&gt;DNS Labels for Nginx Ingress&lt;/h3&gt;
-&lt;p&gt;Suppose you want to use an nginx ingress rather than a load balancer service?  You can use this same method, but it&amp;rsquo;s slightly more complicated.  Again, it&amp;rsquo;s documented, but not well, on &lt;a href=&#34;https://docs.microsoft.com/en-us/azure/aks/ingress-static-ip&#34;&gt;this page&lt;/a&gt;.  Specifically, you need to set &lt;code&gt;controller.service.annotations.&amp;quot;service\.beta\.kubernetes\.io/azure-dns-label-name&amp;quot;=&amp;quot;yourdnslabel&amp;quot;&lt;/code&gt;, where &lt;em&gt;yourdnslabel&lt;/em&gt; is the dns name you want to use.&lt;/p&gt;
-</description>
     </item>
     
   </channel>

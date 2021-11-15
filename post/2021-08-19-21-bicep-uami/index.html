@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<meta name="generator" content="Hugo 0.87.0" />
+		<meta name="generator" content="Hugo 0.89.2" />
 		<title>Azure Bicep &amp; User Assigned Managed Identity - Larry Claman&#39;s Blog</title>
 
 		<meta name="description" content="Create a user assigned managed identity with Bicep and assign it to a web app">
@@ -74,7 +74,7 @@
 	<p>This will be a quick one!</p>
 <p>A colleague asked me if it was easier to use <a href="https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview">user assigned managed identities</a> in Bicep versus ARM.  Well, challenge accepted!</p>
 <p>After about 45 minutes of hacking, I created the following:</p>
-<pre><code>@description('Web app name.')
+<pre tabindex="0"><code>@description('Web app name.')
 @minLength(2)
 param webAppName string = 'webApp-${uniqueString(resourceGroup().id)}'
 
@@ -208,11 +208,10 @@ resource keyVaultWebsiteUser 'Microsoft.Authorization/roleAssignments@2020-04-01
 </code></pre><p>Key things to point out here with the web app config:</p>
 <ul>
 <li>The set of lines
-<pre><code>userAssignedIdentities: {
+<pre tabindex="0"><code>userAssignedIdentities: {
     '${uami.id}': {}
     }
-</code></pre><p>are where you associate the user-assigned identity id with the web app</p>
-</li>
+</code></pre>are where you associate the user-assigned identity id with the web app</li>
 <li>You also need the line <code>keyVaultReferenceIdentity: uami.id</code> to tell the app service which identity to use when contacting the key vault</li>
 </ul>
 <p>Cool stuff!</p>
@@ -223,6 +222,9 @@ resource keyVaultWebsiteUser 'Microsoft.Authorization/roleAssignments@2020-04-01
 	<a class="prev-post" href="https://larryclaman.github.io/post/2021-04-04-aks-dns-naming/">
 		<img class="icon-text" src="/img/prev.svg"/>Easily create DNS names with Azure Kubernetes Service</a>
 
+
+	<a class="next-post" href="https://larryclaman.github.io/post/2021-11-14-21-keda/">KEDA, Windows, and Batch Jobs<img class="icon-text" src="/img/next.svg"/>
+	</a>
 
 </nav>
 

@@ -6,10 +6,178 @@
     <description>Recent content on Larry Claman&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en</language>
-    <lastBuildDate>Thu, 19 Aug 2021 00:00:00 +0000</lastBuildDate>
+    <lastBuildDate>Sun, 14 Nov 2021 18:33:31 -0500</lastBuildDate>
     
 	<atom:link href="https://larryclaman.github.io/index.xml" rel="self" type="application/rss+xml" />
     
+    
+    <item>
+      <title>KEDA, Windows, and Batch Jobs</title>
+      <link>https://larryclaman.github.io/post/2021-11-14-21-keda/</link>
+      <pubDate>Sun, 14 Nov 2021 18:33:31 -0500</pubDate>
+      
+      <guid>https://larryclaman.github.io/post/2021-11-14-21-keda/</guid>
+      <description>&lt;p&gt;I finally had a reason to dive into &lt;a href=&#34;https://keda.sh&#34;&gt;KEDA&lt;/a&gt; in conjunction with AKS and learned a lot.  I&amp;rsquo;ve been working with a customer who&amp;rsquo;s been looking to migrate a homegrown, on-premises batch process to Azure Kubernetes Service.  KEDA, &lt;em&gt;Kubernetes Event Driven Autoscaling&lt;/em&gt;, looked to be a great way to solve this challenge, but there were some requirements that made the answer not-so-simple.  The first challenge was, can it work with Windows workloads?&lt;/p&gt;
+&lt;p&gt;The answer to the first question is, &lt;strong&gt;YES&lt;/strong&gt;!  Let&amp;rsquo;s walk through this:&lt;/p&gt;
+&lt;h2 id=&#34;keda--windows&#34;&gt;KEDA &amp;amp; Windows&lt;/h2&gt;
+&lt;p&gt;I started with the excellent samples at &lt;a href=&#34;https://github.com/tomconte/sample-keda-queue-jobs&#34;&gt;https://github.com/tomconte/sample-keda-queue-jobs&lt;/a&gt;, but I needed to take these and substantially update them 1) to use KEDA 2.0, and 2) to support Windows workers.&lt;/p&gt;
+&lt;p&gt;These samples use an illustrative application that places message (eg, &amp;lsquo;jobs&amp;rsquo;) in an Azure Storage queue.  KEDA is then used to schedule Kubernetes jobs using this queue as a trigger.  Also notice we are scheduling &lt;a href=&#34;https://kubernetes.io/docs/concepts/workloads/controllers/job/&#34;&gt;Kubernetes jobs&lt;/a&gt;, not deployments; these work extremely well for this use case but are a little less common than deployments.&lt;/p&gt;
+&lt;h3 id=&#34;aks-cluster--installing-keda&#34;&gt;AKS Cluster &amp;amp; installing KEDA&lt;/h3&gt;
+&lt;p&gt;We&amp;rsquo;ll start by creating the AKS cluster:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;RG=keda-sample
+LOCATION=westus2
+CLUSTER_NAME=&amp;quot;kedatest&amp;quot;
+az group create -l $LOCATION -n $RG
+
+az aks create \
+ -g $RG \
+ -n $CLUSTER_NAME \
+ --node-count 1 \
+ --node-vm-size Standard_DS3_v2 \
+ --generate-ssh-keys \
+  --node-osdisk-type Managed \
+  --enable-cluster-autoscaler \
+  --min-count 1 \
+  --max-count 10 \
+  --network-plugin azure 
+
+az aks get-credentials -g $RG -n $CLUSTER_NAME
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;One of the things we&amp;rsquo;re going to do for this use case is use the new AKS &lt;a href=&#34;https://docs.microsoft.com/en-us/azure/aks/scale-down-mode&#34;&gt;deallocate&lt;/a&gt; scale down mode to improve scale out performance.&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;az aks nodepool update --scale-down-mode Deallocate --name nodepool1  --cluster-name $CLUSTER_NAME --resource-group $RG
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Let&amp;rsquo;s install KEDA:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;helm repo add kedacore https://kedacore.github.io/charts
+helm repo update
+kubectl create namespace keda
+helm install keda kedacore/keda --version 2.4.0 --namespace keda
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;And finally, let&amp;rsquo;s add a Windows node pool:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;az aks nodepool add -g $RG --cluster-name $CLUSTER_NAME -n win1  --os-type Windows \
+   --enable-cluster-autoscaler --min-count 0 --max-count 10 --scale-down-mode Deallocate
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;storage-queue&#34;&gt;Storage Queue&lt;/h3&gt;
+&lt;p&gt;Now we need to set up the storage queue:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;STORAGE_ACCOUNT_NAME=kedademo # set to your storage acct name; must be globally unique
+export QUEUE_NAME=keda-queue
+az storage account create -g $RG -n $STORAGE_ACCOUNT_NAME
+az storage queue create -n $QUEUE_NAME
+export AzureWebJobsStorage=$(az storage account show-connection-string --name $STORAGE_ACCOUNT_NAME --query connectionString -o tsv)  # this env variable will be used later by our application
+
+# save the storage account connection string as a Kubernetes Secret
+kubectl create secret generic secrets \
+    --from-literal=AzureWebJobsStorage=$AzureWebJobsStorage
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;worker-application&#34;&gt;Worker application&lt;/h3&gt;
+&lt;p&gt;Next, we need to build a Windows container image with our worker application. I&amp;rsquo;ll use Azure Container registry to do the actual image build.  I&amp;rsquo;ll also share the source code for the application at the end of this blog post.&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;export ACR=kedatest01  # set to your ACR name; must be globally unique
+az acr create -n $ACR -g $RG --sku Standard
+az aks update -n $CLUSTER_NAME -g $RG  --attach-acr $ACR
+
+az acr build -r $ACR -t $ACR.azurecr.io/queue-consumer-windows  --platform windows queue-consumer-windows
+&lt;/code&gt;&lt;/pre&gt;&lt;h2 id=&#34;running-the-sample&#34;&gt;Running the sample&lt;/h2&gt;
+&lt;p&gt;We&amp;rsquo;re now ready to start using our sample application.  As I mentioned above, we&amp;rsquo;re going to use a KEDA ScaledJob to handle scaling out workers.  Here&amp;rsquo;s the Kubernetes manifest: (which is a file named &lt;em&gt;azurequeue_scaledobject_jobs_windows.yaml&lt;/em&gt;)&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: azure-queue-scaledobject-jobs-win
+  namespace: default
+spec:
+  pollingInterval: 30
+  maxReplicaCount: 50
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTargetRef:
+    parallelism: 1
+    completions: 1
+    activeDeadlineSeconds: 600
+    backoffLimit: 6
+    template:
+      spec:
+        nodeSelector:
+          kubernetes.io/os: windows
+        containers:
+        - name: consumer-job
+          image: $ACR.azurecr.io/queue-consumer-windows
+          resources:
+            requests:
+              cpu: 100m
+              memory: 2000Mi # intentionally set high in order to trigger cluster autoscaler
+            limits:
+              cpu: 100m
+              memory: 2000Mi
+          env:
+          - name: AzureWebJobsStorage
+            valueFrom:
+              secretKeyRef:
+                name: secrets
+                key: AzureWebJobsStorage
+          - name: QUEUE_NAME
+            value: keda-queue
+  triggers:
+  - type: azure-queue
+    metadata:
+      queueName: keda-queue
+      queueLength: &#39;1&#39;
+      connectionFromEnv: AzureWebJobsStorage
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Deploy this as follows:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;cat azurequeue_scaledobject_jobs_windows.yaml| envsubst | kubectl apply -f -
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;And finally, run the python app to load up the queue with work:&lt;/p&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;python3 -m venv .venv # only run once
+source .venv/bin/activate
+pip install -r requirements.txt # only run once
+
+python send_messages.py 100 # adds 100 messages into the queue
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;At this point, KEDA will create up to &lt;em&gt;MaxReplicaCount&lt;/em&gt; jobs (50, per our configuration) to process the messages which have been placed in the storage queue.  As each job will consume 2Gb of memory, very quickly the jobs will not be schedulable, and the Cluster Autoscaler will kick in to scale out the cluster.  As jobs complete, KEDA will schedule new ones until it runs out of work (eg, the queue is empty)&lt;/p&gt;
+&lt;p&gt;In the next blog post, we&amp;rsquo;ll cover some additional tweaking that can be added to this configuration in support of long running jobs.&lt;/p&gt;
+&lt;h2 id=&#34;code-samples&#34;&gt;Code Samples&lt;/h2&gt;
+&lt;h3 id=&#34;queue-consumer&#34;&gt;Queue Consumer&lt;/h3&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;import os
+import time
+from azure.storage.queue import QueueClient
+
+try:
+  connection_string = os.environ[&#39;AzureWebJobsStorage&#39;]
+  queue_name = os.environ[&#39;QUEUE_NAME&#39;]
+except KeyError:
+  print(&#39;Error: missing environment variable AzureWebJobsStorage or QUEUE_NAME&#39;)
+  exit(1)
+
+queue = QueueClient.from_connection_string(conn_str=connection_string, queue_name=queue_name)
+
+# Get a single message
+message = next(queue.receive_messages())
+
+# Print the message
+print(message)
+
+# Delete message from the queue
+queue.delete_message(message)
+
+# Sleep for a while, simulating a long-running job
+time.sleep(30)
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;queue-consumer-dockerfile&#34;&gt;Queue Consumer Dockerfile&lt;/h3&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;# 1809 required for AKS
+FROM python:windowsservercore-1809
+WORKDIR /app
+RUN pip install azure-storage-queue
+COPY queue_consumer.py /app
+CMD [&amp;quot;python&amp;quot;, &amp;quot;queue_consumer.py&amp;quot;]
+&lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;send_messagespy&#34;&gt;send_messages.py&lt;/h3&gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;import os
+import sys
+import time
+from azure.storage.queue import QueueClient
+
+try:
+  connection_string = os.environ[&#39;AzureWebJobsStorage&#39;]
+  queue_name = os.environ[&#39;QUEUE_NAME&#39;]
+except KeyError:
+  print(&#39;Error: missing environment variable AzureWebJobsStorage or QUEUE_NAME&#39;)
+  exit(1)
+
+queue = QueueClient.from_connection_string(conn_str=connection_string, queue_name=queue_name)
+
+for message in range(0, int(sys.argv[1])):
+  queue.send_message(content=&#39;foo_&#39;+str(message))
+
+&lt;/code&gt;&lt;/pre&gt;</description>
+    </item>
     
     <item>
       <title>Azure Bicep &amp; User Assigned Managed Identity</title>
@@ -20,7 +188,7 @@
       <description>&lt;p&gt;This will be a quick one!&lt;/p&gt;
 &lt;p&gt;A colleague asked me if it was easier to use &lt;a href=&#34;https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview&#34;&gt;user assigned managed identities&lt;/a&gt; in Bicep versus ARM.  Well, challenge accepted!&lt;/p&gt;
 &lt;p&gt;After about 45 minutes of hacking, I created the following:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;@description(&#39;Web app name.&#39;)
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;@description(&#39;Web app name.&#39;)
 @minLength(2)
 param webAppName string = &#39;webApp-${uniqueString(resourceGroup().id)}&#39;
 
@@ -154,11 +322,10 @@ resource keyVaultWebsiteUser &#39;Microsoft.Authorization/roleAssignments@2020-0
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Key things to point out here with the web app config:&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;The set of lines
-&lt;pre&gt;&lt;code&gt;userAssignedIdentities: {
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;userAssignedIdentities: {
     &#39;${uami.id}&#39;: {}
     }
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;are where you associate the user-assigned identity id with the web app&lt;/p&gt;
-&lt;/li&gt;
+&lt;/code&gt;&lt;/pre&gt;are where you associate the user-assigned identity id with the web app&lt;/li&gt;
 &lt;li&gt;You also need the line &lt;code&gt;keyVaultReferenceIdentity: uami.id&lt;/code&gt; to tell the app service which identity to use when contacting the key vault&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;Cool stuff!&lt;/p&gt;
@@ -175,13 +342,13 @@ resource keyVaultWebsiteUser &#39;Microsoft.Authorization/roleAssignments@2020-0
 to create a loadbalancer service with public IP address.  Most, if not all, of these examples recommend that you access the service by IP address rather than by using a DNS name.&lt;/p&gt;
 &lt;p&gt;I was recently leading a workshop which covered this topic, and I wondered if there was an easy way to get AKS to assign a DNS name for a loadbalancer service.  It turns out, there is, but it&amp;rsquo;s not documented well and is hidden within the AKS documentation.&lt;/p&gt;
 &lt;p&gt;The method is documented on &lt;a href=&#34;https://docs.microsoft.com/en-us/azure/aks/static-ip#apply-a-dns-label-to-the-service&#34;&gt;this page&lt;/a&gt;, and it&amp;rsquo;s actually pretty straightforward to use.  The trick is to set the following metadata annotation on your service:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;metadata:
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;metadata:
   annotations:
     service.beta.kubernetes.io/azure-dns-label-name: yourchosendnsname
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;By using this annotation, AKS will create a DNS record of the form &lt;code&gt;[yourchosendnsname].[location].cloudapp.azure.com&lt;/code&gt;.&lt;/p&gt;
 &lt;h3 id=&#34;walk-through&#34;&gt;Walk-Through&lt;/h3&gt;
 &lt;p&gt;Let&amp;rsquo;s walk through an example by deploying the sample &amp;lsquo;Azure Voting App&amp;rsquo; from the &lt;a href=&#34;https://github.com/Azure-Samples/azure-voting-app-redis/blob/master/azure-vote-all-in-one-redis.yaml&#34;&gt;Azure Documentation&lt;/a&gt;:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;kubectl apply -f https://raw.githubusercontent.com/Azure-Samples/azure-voting-app-redis/master/azure-vote-all-in-one-redis.yaml
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;kubectl apply -f https://raw.githubusercontent.com/Azure-Samples/azure-voting-app-redis/master/azure-vote-all-in-one-redis.yaml
  
 kubectl get services
 NAME               TYPE           CLUSTER-IP     EXTERNAL-IP    PORT(S)        AGE
@@ -189,7 +356,7 @@ azure-vote-back    ClusterIP      10.0.73.110    &amp;lt;none&amp;gt;         63
 azure-vote-front   LoadBalancer   10.0.135.119   52.251.9.116   80:30118/TCP   7s
 kubernetes         ClusterIP      10.0.0.1       &amp;lt;none&amp;gt;         443/TCP        10m
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;As expected, the azure-vote-front service is available via a public IP.  Now, let&amp;rsquo;s modify the service definition to use the annotation; I&amp;rsquo;m going to use the label &lt;strong&gt;larryvote&lt;/strong&gt;, which should create the dns record larryvote.eastus2.cloudapp.com:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;kubectl apply -f - &amp;lt;&amp;lt;EOF
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;kubectl apply -f - &amp;lt;&amp;lt;EOF
 apiVersion: v1
 kind: Service
 metadata:
@@ -204,7 +371,7 @@ spec:
     app: azure-vote-front
 EOF
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Let&amp;rsquo;s check to see if it worked:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;&amp;gt; nslookup larryvote.eastus2.cloudapp.azure.com
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;&amp;gt; nslookup larryvote.eastus2.cloudapp.azure.com
 
 Non-authoritative answer:
 Name:   larryvote.eastus2.cloudapp.azure.com
@@ -212,7 +379,7 @@ Address: 52.251.9.116
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Yep, it worked!   You next thought may be, &amp;ldquo;That&amp;rsquo;s great, but I don&amp;rsquo;t want to use that ugly domain name.  How can I use my own domain name?&amp;rdquo;  The solution to this is also straightforward: use a CNAME.&lt;/p&gt;
 &lt;h3 id=&#34;using-a-cname&#34;&gt;Using a CNAME&lt;/h3&gt;
 &lt;p&gt;In my case, I own the domain &lt;strong&gt;claman.org&lt;/strong&gt;.  So I simply need to create a cname for larryvote.claman.org pointing to larryvote.eastus2.cloudapp.azure.com.  Let&amp;rsquo;s check what that looks like:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;&amp;gt; nslookup larryvote.claman.org
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;&amp;gt; nslookup larryvote.claman.org
 
 Non-authoritative answer:
 larryvote.claman.org    canonical name = larryvote.eastus2.cloudapp.azure.com.
@@ -233,7 +400,7 @@ Address: 52.251.9.116
       <guid>https://larryclaman.github.io/post/2020-11-15-dependabot/</guid>
       <description>&lt;p&gt;I recently coached a DevOps hackathon where one of the success criteria was &amp;ldquo;Every PR must have an associated Issue&amp;rdquo;.  This is easy to enforce in Azure DevOps, and while it can&amp;rsquo;t be currently enforced in GitHub, it&amp;rsquo;s possible to use &lt;a href=&#34;https://github.com/hattan/verify-linked-issue-action/&#34;&gt;this&lt;/a&gt; GitHub Action to verify that all pull requests in your repo contain a reference to an issue.&lt;/p&gt;
 &lt;p&gt;All fine and good, except that when I turned on Dependabot for my repo, I realized that Dependabot only creates pull requests, but it does not create issues, which doesn&amp;rsquo;t meet my success criteria.  Well, GitHub workflows to the rescue!  The following workflow will create an issue whenever Dependabot opens a PR:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;name: CreateDependabotIssue
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;name: CreateDependabotIssue
 on:
   workflow_dispatch:
   pull_request:
@@ -356,7 +523,7 @@ jobs:
       <guid>https://larryclaman.github.io/post/2020-04-09-querying-for-azure-regional-pairs/</guid>
       <description>&lt;p&gt;A teammate recently posted a question on our Team&amp;rsquo;s channel, asking how to programmatically query to find out an Azure Region&amp;rsquo;s pair.  Easy I thought - except it turns out, this isn&amp;rsquo;t exposed in the standard PowerShell commands, nor in the Azure CLI.&lt;/p&gt;
 &lt;p&gt;The PowerShell command &lt;strong&gt;Get-AzLocation&lt;/strong&gt; only returns the Location, DisplayName, and Providers:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;PS C:\&amp;gt; Get-AzLocation|ft
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;PS C:\&amp;gt; Get-AzLocation|ft
 
 Location           DisplayName          Providers
 --------           -----------          ---------
@@ -366,7 +533,7 @@ centralus          Central US           {Microsoft.Media, Microsoft.HDInsight, M
 eastus             East US              {Microsoft.Media, Microsoft.HDInsight, Microsoft.DataShare, Microsoft.SqlVirtualMachine...}
 [snip]
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Meanwhile, the Azure CLI returns more info, but not the pair:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;PS C:\&amp;gt; az account list-locations
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;PS C:\&amp;gt; az account list-locations
 DisplayName           Latitude    Longitude    Name
 --------------------  ----------  -----------  ------------------
 East Asia             22.267      114.188      eastasia
@@ -378,7 +545,7 @@ West US               37.783      -122.417     westus
 [snip]
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;&lt;em&gt;Edit:  Skip to the bottom of this blog for a new, simplified solution!&lt;/em&gt;&lt;/p&gt;
 &lt;p&gt;All hope is not lost!  You can find the region&amp;rsquo;s pair, but you need to query the Azure REST api directly, as documented at &lt;a href=&#34;https://docs.microsoft.com/en-us/rest/api/resources/Subscriptions/ListLocations&#34;&gt;https://docs.microsoft.com/en-us/rest/api/resources/Subscriptions/ListLocations&lt;/a&gt;.  In the past, you&amp;rsquo;d need to fire up your favorite REST client (eg, &lt;a href=&#34;https://github.com/projectkudu/ARMClient&#34;&gt;armclient&lt;/a&gt;, Vscode + &lt;a href=&#34;https://marketplace.visualstudio.com/items?itemName=humao.rest-client&#34;&gt;rest client extension&lt;/a&gt;, Postman, etc), but in exploring this, I learned an easier way:  You can now make Azure REST calls directly from the CLI!  Here&amp;rsquo;s what that looks like:   &lt;em&gt;(Replace {yoursubid} with your specific subscription id)&lt;/em&gt;&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output json
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output json
 {
   &amp;quot;value&amp;quot;: [
     {
@@ -403,7 +570,7 @@ West US               37.783      -122.417     westus
     },
 [snip]
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;What&amp;rsquo;s really cool is you can use the CLI&amp;rsquo;s built-in jmespath query engine to filter and massage the results, eg: &lt;em&gt;(Column1 is the region, and Column2 is the pair)&lt;/em&gt;&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output table --query &#39;value[].[name,metadata.pairedRegion[].name]&#39;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output table --query &#39;value[].[name,metadata.pairedRegion[].name]&#39;
 
 Column1              Column2
 -------------------  ----------------------
@@ -415,7 +582,7 @@ australiaeast        [&#39;australiasoutheast&#39;]
 [snip]
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;(I&amp;rsquo;m still working on my jmespath ninja skills, so there&amp;rsquo;s still a little cleanup to be done on this table, but it gets the point across.)&lt;/p&gt;
 &lt;p&gt;EDIT Feb 2021:  Subsequent to my posting this blog, it appears that you now CAN indeed get the pair info directly from the AZ cli.  Example:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;az account list-locations -o table --query &#39;[].[displayName, name, metadata.physicalLocation, metadata.regionCategory,metadata.pairedRegion[0].name]&#39;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;az account list-locations -o table --query &#39;[].[displayName, name, metadata.physicalLocation, metadata.regionCategory,metadata.pairedRegion[0].name]&#39;
 &lt;/code&gt;&lt;/pre&gt;</description>
     </item>
     
@@ -431,7 +598,7 @@ australiaeast        [&#39;australiasoutheast&#39;]
 &lt;p&gt;My immediate answer was &amp;ldquo;you can&amp;rsquo;t.&amp;rdquo;  However, after a little investigation and a little hacking, I was able to prototype a solution using the &lt;a href=&#34;https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-base-image-update&#34;&gt;automated trigger &amp;amp; build feature&lt;/a&gt; of Azure Container Registry (ACR).  The hint for how to do this was buried in the &lt;a href=&#34;https://github.com/MicrosoftDocs/azure-docs/issues/34480&#34;&gt;Q&amp;amp;A&lt;/a&gt; on documentation page, where it&amp;rsquo;s suggested to use a dummy image to trigger the AzDo pipeline.  Here&amp;rsquo;s a walkthrough of how I did this:&lt;/p&gt;
 &lt;h2 id=&#34;sample-repo--pipeline&#34;&gt;Sample Repo &amp;amp; Pipeline&lt;/h2&gt;
 &lt;p&gt;As a sample repo, I used the canonical &lt;a href=&#34;https://dev.azure.com/larrydevopstest/_git/AzureVotingApp&#34;&gt;Azure voting app&lt;/a&gt;, but I simplified it a bit to suit my needs. My Dockerfile is pretty simple; my goal is for the build pipeline to run whenever the base python:3.6-slim image is updated on Dockerhub.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;FROM python:3.6-slim
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;FROM python:3.6-slim
 RUN pip install redis
 RUN pip install flask
 ADD /azure-vote /app
@@ -441,7 +608,7 @@ CMD [ &amp;quot;python&amp;quot;, &amp;quot;/app/main.py&amp;quot; ]
 &lt;p&gt;As I mentioned above, I&amp;rsquo;m going to build a dummy base image using ACR, and then use a webhook when this image updates to trigger my Azure DevOps pipeline.&lt;/p&gt;
 &lt;p&gt;First, I&amp;rsquo;ll need to follow the instructions &lt;a href=&#34;https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-base-image-update&#34;&gt;here&lt;/a&gt; to create a dummy base image and a task to update it when its reference base updates on Dockerhub.&lt;/p&gt;
 &lt;p&gt;To start, build the base image in ACR:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;ACR_NAME=larrymsvoting
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;ACR_NAME=larrymsvoting
 REPO=&amp;quot;https://larrydevopstest@dev.azure.com/larrydevopstest/AzureVotingApp/_git/AzureVotingApp&amp;quot;
 DOCKER_FILE=&amp;quot;azure-vote/Dockerfile-pythonbase&amp;quot;
 
@@ -449,7 +616,7 @@ az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
     --file $DOCKER_FILE $REPO
     
 &lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;step-2-create-a-task&#34;&gt;Step 2: Create a task&lt;/h3&gt;
-&lt;pre&gt;&lt;code&gt;az acr task create \
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;az acr task create \
     --registry $ACR_NAME \
     --name taskpythonbase \
     -t baseimages/python-3.6-slim-base:{{.Run.ID}} \
@@ -459,7 +626,7 @@ az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
     --commit-trigger-enabled false \
     -o table
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Assuming it runs successfully, you&amp;rsquo;ll see output like:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;NAME            PLATFORM    STATUS    SOURCE REPOSITORY                                                                         TRIGGERS
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;NAME            PLATFORM    STATUS    SOURCE REPOSITORY                                                                         TRIGGERS
 --------------  ----------  --------  ----------------------------------------------------------------------------------------  ----------
 taskpythonbase  linux       Enabled   https://larrydevopstest@dev.azure.com/larrydevopstest/AzureVotingApp/_git/AzureVotingApp  BASE_IMAGE
 &lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;step-3-logic-app&#34;&gt;Step 3: Logic App&lt;/h3&gt;
@@ -471,7 +638,7 @@ In the portal, create a logic app and give it a relevant name, eg &amp;lsquo;pyt
 &lt;p&gt;Finally, in your logic apps&amp;rsquo;s first step &amp;lsquo;When an HTTP request is received&amp;rsquo;, find the post URL and copy it, as it will be needed for the next step.&lt;/p&gt;
 &lt;h2 id=&#34;step-4-acr-webhook&#34;&gt;Step 4: ACR webhook&lt;/h2&gt;
 &lt;p&gt;Next, we&amp;rsquo;ll create an ACR webhook which fires whenever the base image updates.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;URI=&amp;lt;webhook post url from prior step&amp;gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;URI=&amp;lt;webhook post url from prior step&amp;gt;
 
 az acr webhook create -n pythonbasehook -r $ACR_NAME \
     --scope baseimages/python-3.6-slim-base \
@@ -481,7 +648,7 @@ az acr webhook create -n pythonbasehook -r $ACR_NAME \
 &lt;img src=&#34;flow.png&#34; alt=&#34;flow&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;step-6-test&#34;&gt;Step 6: Test&lt;/h2&gt;
 &lt;p&gt;Since the Dockerhub base image is only going to be updated periodically, you can test your integration by manually running a build in ACR:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
     --file $DOCKER_FILE $REPO
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;If all is working, this should trigger a build in Azure DevOps.&lt;/p&gt;
 &lt;h2 id=&#34;final-thoughts&#34;&gt;Final Thoughts&lt;/h2&gt;

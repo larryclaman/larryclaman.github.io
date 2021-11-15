@@ -20,7 +20,7 @@
       <description>&lt;p&gt;This will be a quick one!&lt;/p&gt;
 &lt;p&gt;A colleague asked me if it was easier to use &lt;a href=&#34;https://docs.microsoft.com/en-us/azure/active-directory/managed-identities-azure-resources/overview&#34;&gt;user assigned managed identities&lt;/a&gt; in Bicep versus ARM.  Well, challenge accepted!&lt;/p&gt;
 &lt;p&gt;After about 45 minutes of hacking, I created the following:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;@description(&#39;Web app name.&#39;)
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;@description(&#39;Web app name.&#39;)
 @minLength(2)
 param webAppName string = &#39;webApp-${uniqueString(resourceGroup().id)}&#39;
 
@@ -154,11 +154,10 @@ resource keyVaultWebsiteUser &#39;Microsoft.Authorization/roleAssignments@2020-0
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Key things to point out here with the web app config:&lt;/p&gt;
 &lt;ul&gt;
 &lt;li&gt;The set of lines
-&lt;pre&gt;&lt;code&gt;userAssignedIdentities: {
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;userAssignedIdentities: {
     &#39;${uami.id}&#39;: {}
     }
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;are where you associate the user-assigned identity id with the web app&lt;/p&gt;
-&lt;/li&gt;
+&lt;/code&gt;&lt;/pre&gt;are where you associate the user-assigned identity id with the web app&lt;/li&gt;
 &lt;li&gt;You also need the line &lt;code&gt;keyVaultReferenceIdentity: uami.id&lt;/code&gt; to tell the app service which identity to use when contacting the key vault&lt;/li&gt;
 &lt;/ul&gt;
 &lt;p&gt;Cool stuff!&lt;/p&gt;

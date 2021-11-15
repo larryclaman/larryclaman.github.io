@@ -23,7 +23,7 @@
 &lt;p&gt;My immediate answer was &amp;ldquo;you can&amp;rsquo;t.&amp;rdquo;  However, after a little investigation and a little hacking, I was able to prototype a solution using the &lt;a href=&#34;https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-base-image-update&#34;&gt;automated trigger &amp;amp; build feature&lt;/a&gt; of Azure Container Registry (ACR).  The hint for how to do this was buried in the &lt;a href=&#34;https://github.com/MicrosoftDocs/azure-docs/issues/34480&#34;&gt;Q&amp;amp;A&lt;/a&gt; on documentation page, where it&amp;rsquo;s suggested to use a dummy image to trigger the AzDo pipeline.  Here&amp;rsquo;s a walkthrough of how I did this:&lt;/p&gt;
 &lt;h2 id=&#34;sample-repo--pipeline&#34;&gt;Sample Repo &amp;amp; Pipeline&lt;/h2&gt;
 &lt;p&gt;As a sample repo, I used the canonical &lt;a href=&#34;https://dev.azure.com/larrydevopstest/_git/AzureVotingApp&#34;&gt;Azure voting app&lt;/a&gt;, but I simplified it a bit to suit my needs. My Dockerfile is pretty simple; my goal is for the build pipeline to run whenever the base python:3.6-slim image is updated on Dockerhub.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;FROM python:3.6-slim
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;FROM python:3.6-slim
 RUN pip install redis
 RUN pip install flask
 ADD /azure-vote /app
@@ -33,7 +33,7 @@ CMD [ &amp;quot;python&amp;quot;, &amp;quot;/app/main.py&amp;quot; ]
 &lt;p&gt;As I mentioned above, I&amp;rsquo;m going to build a dummy base image using ACR, and then use a webhook when this image updates to trigger my Azure DevOps pipeline.&lt;/p&gt;
 &lt;p&gt;First, I&amp;rsquo;ll need to follow the instructions &lt;a href=&#34;https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-base-image-update&#34;&gt;here&lt;/a&gt; to create a dummy base image and a task to update it when its reference base updates on Dockerhub.&lt;/p&gt;
 &lt;p&gt;To start, build the base image in ACR:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;ACR_NAME=larrymsvoting
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;ACR_NAME=larrymsvoting
 REPO=&amp;quot;https://larrydevopstest@dev.azure.com/larrydevopstest/AzureVotingApp/_git/AzureVotingApp&amp;quot;
 DOCKER_FILE=&amp;quot;azure-vote/Dockerfile-pythonbase&amp;quot;
 
@@ -41,7 +41,7 @@ az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
     --file $DOCKER_FILE $REPO
     
 &lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;step-2-create-a-task&#34;&gt;Step 2: Create a task&lt;/h3&gt;
-&lt;pre&gt;&lt;code&gt;az acr task create \
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;az acr task create \
     --registry $ACR_NAME \
     --name taskpythonbase \
     -t baseimages/python-3.6-slim-base:{{.Run.ID}} \
@@ -51,7 +51,7 @@ az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
     --commit-trigger-enabled false \
     -o table
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;Assuming it runs successfully, you&amp;rsquo;ll see output like:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;NAME            PLATFORM    STATUS    SOURCE REPOSITORY                                                                         TRIGGERS
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;NAME            PLATFORM    STATUS    SOURCE REPOSITORY                                                                         TRIGGERS
 --------------  ----------  --------  ----------------------------------------------------------------------------------------  ----------
 taskpythonbase  linux       Enabled   https://larrydevopstest@dev.azure.com/larrydevopstest/AzureVotingApp/_git/AzureVotingApp  BASE_IMAGE
 &lt;/code&gt;&lt;/pre&gt;&lt;h3 id=&#34;step-3-logic-app&#34;&gt;Step 3: Logic App&lt;/h3&gt;
@@ -63,7 +63,7 @@ In the portal, create a logic app and give it a relevant name, eg &amp;lsquo;pyt
 &lt;p&gt;Finally, in your logic apps&amp;rsquo;s first step &amp;lsquo;When an HTTP request is received&amp;rsquo;, find the post URL and copy it, as it will be needed for the next step.&lt;/p&gt;
 &lt;h2 id=&#34;step-4-acr-webhook&#34;&gt;Step 4: ACR webhook&lt;/h2&gt;
 &lt;p&gt;Next, we&amp;rsquo;ll create an ACR webhook which fires whenever the base image updates.&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;URI=&amp;lt;webhook post url from prior step&amp;gt;
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;URI=&amp;lt;webhook post url from prior step&amp;gt;
 
 az acr webhook create -n pythonbasehook -r $ACR_NAME \
     --scope baseimages/python-3.6-slim-base \
@@ -73,7 +73,7 @@ az acr webhook create -n pythonbasehook -r $ACR_NAME \
 &lt;img src=&#34;flow.png&#34; alt=&#34;flow&#34;&gt;&lt;/p&gt;
 &lt;h2 id=&#34;step-6-test&#34;&gt;Step 6: Test&lt;/h2&gt;
 &lt;p&gt;Since the Dockerhub base image is only going to be updated periodically, you can test your integration by manually running a build in ACR:&lt;/p&gt;
-&lt;pre&gt;&lt;code&gt;az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
+&lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
     --file $DOCKER_FILE $REPO
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;If all is working, this should trigger a build in Azure DevOps.&lt;/p&gt;
 &lt;h2 id=&#34;final-thoughts&#34;&gt;Final Thoughts&lt;/h2&gt;
