@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8"/>
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<meta name="generator" content="Hugo 0.89.4" />
+		<title>Kubernetes &amp; long running batch Jobs - Larry Claman&#39;s Blog</title>
+
+		<meta name="description" content="Ensure that long running kubernetes jobs are not terminated as part of scale down">
+
+
+		
+	
+		
+
+
+
+
+<link rel="stylesheet" href="/css/ui.css">
+
+	
+		
+
+		<link  rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Mono|Lato|Raleway">
+
+		
+		<script type="text/javascript">
+			(function(c,l,a,r,i,t,y){
+				c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+				t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+				y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+			})(window, document, "clarity", "script", "44j7jjbeip");
+		</script>
+			
+
+		
+	</head>
+
+<body>
+<header class="container no-print">
+	<div class="u-header">
+		<nav class="bar">
+	<ul><li>
+			<a href="/">
+				<img class="icon-text" src="/img/prev.svg"/>
+			</a>
+		</li><li><a href="/">Blog</a></li></ul>
+</nav>
+
+	</div>
+</header>
+<main class="container">
+
+<article>
+	<header><hgroup id="brand">
+	<h1>Kubernetes &amp; long running batch Jobs</h1>
+	<h5>
+		
+		<time datetime="2021-11-17 00:00:00 &#43;0000 UTC">Nov 17, 2021</time>
+		<span class="no-print">
+			-
+				
+				<a href="/tags/azure">azure</a>
+				
+				<a href="/tags/aks">aks</a>
+				
+				<a href="/tags/kubernetes">kubernetes</a>
+				
+				<a href="/tags/keda">keda</a>
+				<span>
+	</h5>
+	
+</hgroup>
+<hr class="sep" />
+</header>
+	<p>This is a followup to the first part of this series, <a href="2021-11-14-21-keda.md">KEDA &amp; Windows</a>, where I wrote about using Keda to schedule jobs based on work put into an Azure storage queue.</p>
+<p>There are some nuances in using Kubernetes to run long running jobs.  If you have a long running job, you don&rsquo;t want the horizontal pod autoscaler or the cluster autoscaler to terminate the job&rsquo;s pod as part of a balancing or scale down process.  To prevent this, there are some configuration settings that you can adjust.  In this post, I&rsquo;ll describe two of them.  The first (Pod Distruption Budget) is the most general, but requires the most configuration.  The second (CA eviction label) is simple, but only works for jobs.</p>
+<h3 id="setting-pod-disruption-budget">Setting Pod Disruption Budget</h3>
+<p>The first method for preventing your pods from being terminated is to set a <a href="https://kubernetes.io/docs/tasks/run-application/configure-pdb/">Pod Disruption Budget</a>.  By configuring the PDB minAvailable to be the same as the number of jobs you desire, you can prevent the voluntary eviction of pods by the scaling engine.  This is a bit confusing, but let me provide an example:</p>
+<p>First, recall the scaledJob manifest from the previous blog post.   I&rsquo;ve added a label <code>app: winworker</code> to the template spec so that it can be used with the PDB.  Additionally, I&rsquo;ve set <strong>activeDeadlineSeconds</strong> to 2400 seconds (30 min for my job + 10 min extra &lsquo;buffer&rsquo; time).  If a job runs for longer than this amount of time, Keda will assume it has a problem and kill it off.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l">keda.sh/v1alpha1</span><span class="w">
+</span><span class="w"></span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l">ScaledJob</span><span class="w">
+</span><span class="w"></span><span class="nt">metadata</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">azure-queue-scaledobject-jobs-win</span><span class="w">
+</span><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l">default</span><span class="w">
+</span><span class="w"></span><span class="nt">spec</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">pollingInterval</span><span class="p">:</span><span class="w"> </span><span class="m">30</span><span class="w">
+</span><span class="w">  </span><span class="nt">maxReplicaCount</span><span class="p">:</span><span class="w"> </span><span class="m">50</span><span class="w">
+</span><span class="w">  </span><span class="nt">successfulJobsHistoryLimit</span><span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">  </span><span class="nt">failedJobsHistoryLimit</span><span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">  </span><span class="nt">jobTargetRef</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">parallelism</span><span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">    </span><span class="nt">completions</span><span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">    </span><span class="nt">activeDeadlineSeconds</span><span class="p">:</span><span class="w"> </span><span class="m">2400</span><span class="w">  </span><span class="c"># set to expected max runtime + some buffer</span><span class="w">
+</span><span class="w">    </span><span class="nt">backoffLimit</span><span class="p">:</span><span class="w"> </span><span class="m">6</span><span class="w">
+</span><span class="w">    </span><span class="nt">template</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="nt">labels</span><span class="p">:</span><span class="w">
+</span><span class="w">          </span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="l">winworker</span><span class="w">
+</span><span class="w">      </span><span class="nt">spec</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="nt">nodeSelector</span><span class="p">:</span><span class="w">
+</span><span class="w">          </span><span class="nt">kubernetes.io/os</span><span class="p">:</span><span class="w"> </span><span class="l">windows</span><span class="w">
+</span><span class="w">        </span><span class="nt">containers</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">consumer-job</span><span class="w">
+</span><span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l">$ACR.azurecr.io/queue-consumer-windows</span><span class="w">
+</span><span class="w">          </span><span class="nt">resources</span><span class="p">:</span><span class="w">
+</span><span class="w">            </span><span class="nt">requests</span><span class="p">:</span><span class="w">
+</span><span class="w">              </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="l">100m</span><span class="w">
+</span><span class="w">              </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l">2000Mi</span><span class="w"> </span><span class="c"># intentionally set high in order to trigger cluster autoscaler</span><span class="w">
+</span><span class="w">            </span><span class="nt">limits</span><span class="p">:</span><span class="w">
+</span><span class="w">              </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="l">100m</span><span class="w">
+</span><span class="w">              </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l">2000Mi</span><span class="w">
+</span><span class="w">          </span><span class="nt">env</span><span class="p">:</span><span class="w">
+</span><span class="w">          </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">AzureWebJobsStorage</span><span class="w">
+</span><span class="w">            </span><span class="nt">valueFrom</span><span class="p">:</span><span class="w">
+</span><span class="w">              </span><span class="nt">secretKeyRef</span><span class="p">:</span><span class="w">
+</span><span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">secrets</span><span class="w">
+</span><span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l">AzureWebJobsStorage</span><span class="w">
+</span><span class="w">          </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">QUEUE_NAME</span><span class="w">
+</span><span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l">keda-queue</span><span class="w">
+</span><span class="w">  </span><span class="nt">triggers</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span>- <span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l">azure-queue</span><span class="w">
+</span><span class="w">    </span><span class="nt">metadata</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="l">keda-queue</span><span class="w">
+</span><span class="w">      </span><span class="nt">queueLength</span><span class="p">:</span><span class="w"> </span><span class="s1">&#39;1&#39;</span><span class="w">
+</span><span class="w">      </span><span class="nt">connectionFromEnv</span><span class="p">:</span><span class="w"> </span><span class="l">AzureWebJobsStorage</span><span class="w">
+</span></code></pre></div><p>Next, I&rsquo;ll specify the PDB.  Notice that I set <strong>minAvailable</strong> to 50, which is the same number as <strong>maxReplicaCount</strong> in the ScaledJob:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l">policy/v1</span><span class="w">
+</span><span class="w"></span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l">PodDisruptionBudget</span><span class="w">
+</span><span class="w"></span><span class="nt">metadata</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">ww-pdb</span><span class="w">
+</span><span class="w"></span><span class="nt">spec</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">minAvailable</span><span class="p">:</span><span class="w"> </span><span class="m">50</span><span class="w">
+</span><span class="w">  </span><span class="nt">selector</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="l">winworker</span><span class="w">
+</span><span class="w">
+</span></code></pre></div><p>And, Voila!  You will now be able to keep your jobs running for <strong>activeDeadlineSeconds</strong>!</p>
+<h3 id="preventing-the-ca-from-evicting-pods">Preventing the CA from evicting pods</h3>
+<p>The pod disruption budget is a great general purpose solution that will work with any workload: jobs, deployments,etc.  However, if your workload is only Jobs (Keda scheduled or otherwise), there is a simpler method you can use.  In this case, there&rsquo;s no HPA involved; rather, we just want to prevent the cluster autoscaler from scaling down a node with a long running job.</p>
+<p>To achieve this, you can simply set an annotation on your pod as:
+<code>&quot;cluster-autoscaler.kubernetes.io/safe-to-evict&quot;: &quot;false&quot;</code></p>
+<p>Specifically:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-yaml" data-lang="yaml"><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l">keda.sh/v1alpha1</span><span class="w">
+</span><span class="w"></span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l">ScaledJob</span><span class="w">
+</span><span class="w"></span><span class="nt">metadata</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">azure-queue-scaledobject-jobs-win</span><span class="w">
+</span><span class="w">  </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l">default</span><span class="w">
+</span><span class="w"></span><span class="nt">spec</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span><span class="nt">pollingInterval</span><span class="p">:</span><span class="w"> </span><span class="m">30</span><span class="w">
+</span><span class="w">  </span><span class="nt">maxReplicaCount</span><span class="p">:</span><span class="w"> </span><span class="m">50</span><span class="w">
+</span><span class="w">  </span><span class="nt">successfulJobsHistoryLimit</span><span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">  </span><span class="nt">failedJobsHistoryLimit</span><span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">  </span><span class="nt">jobTargetRef</span><span class="p">:</span><span class="w">
+</span><span class="w">    </span><span class="nt">parallelism</span><span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">    </span><span class="nt">completions</span><span class="p">:</span><span class="w"> </span><span class="m">1</span><span class="w">
+</span><span class="w">    </span><span class="nt">activeDeadlineSeconds</span><span class="p">:</span><span class="w"> </span><span class="m">2400</span><span class="w">  </span><span class="c"># set to expected max runtime + some buffer</span><span class="w">
+</span><span class="w">    </span><span class="nt">backoffLimit</span><span class="p">:</span><span class="w"> </span><span class="m">6</span><span class="w">
+</span><span class="w">    </span><span class="nt">template</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="nt">metadata</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="nt">annotations</span><span class="p">:</span><span class="w">
+</span><span class="w">          </span><span class="nt">&#34;cluster-autoscaler.kubernetes.io/safe-to-evict&#34;: </span><span class="s2">&#34;false&#34;</span><span class="w">
+</span><span class="w">        </span><span class="nt">labels</span><span class="p">:</span><span class="w">
+</span><span class="w">          </span><span class="nt">app</span><span class="p">:</span><span class="w"> </span><span class="l">winworker</span><span class="w">
+</span><span class="w">      </span><span class="nt">spec</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span><span class="nt">nodeSelector</span><span class="p">:</span><span class="w">
+</span><span class="w">          </span><span class="nt">kubernetes.io/os</span><span class="p">:</span><span class="w"> </span><span class="l">windows</span><span class="w">
+</span><span class="w">        </span><span class="nt">containers</span><span class="p">:</span><span class="w">
+</span><span class="w">        </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">consumer-job</span><span class="w">
+</span><span class="w">          </span><span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l">$ACR.azurecr.io/queue-consumer-windows</span><span class="w">
+</span><span class="w">          </span><span class="nt">resources</span><span class="p">:</span><span class="w">
+</span><span class="w">            </span><span class="nt">requests</span><span class="p">:</span><span class="w">
+</span><span class="w">              </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="l">100m</span><span class="w">
+</span><span class="w">              </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l">2000Mi</span><span class="w"> </span><span class="c"># intentionally set high in order to trigger cluster autoscaler</span><span class="w">
+</span><span class="w">            </span><span class="nt">limits</span><span class="p">:</span><span class="w">
+</span><span class="w">              </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="l">100m</span><span class="w">
+</span><span class="w">              </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l">2000Mi</span><span class="w">
+</span><span class="w">          </span><span class="nt">env</span><span class="p">:</span><span class="w">
+</span><span class="w">          </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">AzureWebJobsStorage</span><span class="w">
+</span><span class="w">            </span><span class="nt">valueFrom</span><span class="p">:</span><span class="w">
+</span><span class="w">              </span><span class="nt">secretKeyRef</span><span class="p">:</span><span class="w">
+</span><span class="w">                </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">secrets</span><span class="w">
+</span><span class="w">                </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l">AzureWebJobsStorage</span><span class="w">
+</span><span class="w">          </span>- <span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">QUEUE_NAME</span><span class="w">
+</span><span class="w">            </span><span class="nt">value</span><span class="p">:</span><span class="w"> </span><span class="l">keda-queue</span><span class="w">
+</span><span class="w">  </span><span class="nt">triggers</span><span class="p">:</span><span class="w">
+</span><span class="w">  </span>- <span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l">azure-queue</span><span class="w">
+</span><span class="w">    </span><span class="nt">metadata</span><span class="p">:</span><span class="w">
+</span><span class="w">      </span><span class="nt">queueName</span><span class="p">:</span><span class="w"> </span><span class="l">keda-queue</span><span class="w">
+</span><span class="w">      </span><span class="nt">queueLength</span><span class="p">:</span><span class="w"> </span><span class="s1">&#39;1&#39;</span><span class="w">
+</span><span class="w">      </span><span class="nt">connectionFromEnv</span><span class="p">:</span><span class="w"> </span><span class="l">AzureWebJobsStorage</span><span class="w">
+</span></code></pre></div><p>And that&rsquo;s it, no PDB or other configuration needed.  (Do be aware of <code>activeDeadlineSeconds</code>, as that will have the same effect in any case)</p>
+
+</article>
+<nav class="no-print post-nav">
+
+	<a class="prev-post" href="https://larryclaman.github.io/post/2021-11-14-21-keda/">
+		<img class="icon-text" src="/img/prev.svg"/>KEDA, Windows, and Batch Jobs</a>
+
+
+</nav>
+
+
+<section id="related">
+  <h4>See Also</h4>
+  <ul>
+    
+  	<li><a href="/post/2021-11-14-21-keda/">KEDA, Windows, and Batch Jobs</a></li>
+  	
+  	<li><a href="/post/2021-04-04-aks-dns-naming/">Easily create DNS names with Azure Kubernetes Service</a></li>
+  	
+  	<li><a href="/post/2021-08-19-21-bicep-uami/">Azure Bicep &amp; User Assigned Managed Identity</a></li>
+  	
+  </ul>
+</section>
+
+
+
+
+	<div id="disqus_thread" class="no-print"></div>
+<script type="text/javascript">
+
+(function() {
+    
+    
+    if (window.location.hostname == "localhost")
+        return;
+
+    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+    var disqus_shortname = 'larryclamanblog';
+    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();
+</script>
+<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+
+
+			<hr class="sep" />
+		</main>
+		<footer class="container no-print">
+			<div class="u-footer">
+				
+
+<a href="https://github.com/larryclaman/"><img class="icon-social" src="/img/github.svg" alt="Github"/></a>
+
+
+<a href="https://larryclaman.github.io/index.xml" target="_blank"><img class="icon-social" src="/img/feed.svg" alt="Feed"></a>
+
+				<p>
+					
+					
+					
+				</p>
+				
+				<a href="#brand">
+					<img class="icon-text" src="/img/toup.svg" alt="To Up"/>
+					<span>Back to Top</span>
+				</a>
+				
+			</div>
+		</footer>
+		
+	
+
+</body>
+</html>
+
