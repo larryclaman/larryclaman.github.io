@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8"/>
 		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<meta name="generator" content="Hugo 0.89.2" />
+		<meta name="generator" content="Hugo 0.89.4" />
 		<title>KEDA, Windows, and Batch Jobs - Larry Claman&#39;s Blog</title>
 
 		<meta name="description" content="Use KEDA to schedule Windows jobs as part of a batch processing workload">
@@ -182,7 +182,7 @@ pip install -r requirements.txt # only run once
 python send_messages.py 100 # adds 100 messages into the queue
 </code></pre><p>At this point, KEDA will create up to <em>MaxReplicaCount</em> jobs (50, per our configuration) to process the messages which have been placed in the storage queue.  As each job will consume 2Gb of memory, very quickly the jobs will not be schedulable, and the Cluster Autoscaler will kick in to scale out the cluster.  As jobs complete, KEDA will schedule new ones until it runs out of work (eg, the queue is empty).  You can watch jobs being automatically scheduled using the command:</p>
 <pre tabindex="0"><code>kubectl get jobs
-</code></pre><p>In the next blog post, we&rsquo;ll cover some additional tweaking that can be added to this configuration in support of long running jobs.</p>
+</code></pre><p>In the next <a href="2021-11-19-21-keda2.md">blog post</a>, we&rsquo;ll cover some additional tweaking that can be added to this configuration to support long running jobs.</p>
 <h2 id="code-samples">Code Samples</h2>
 <h3 id="queue-consumer">Queue Consumer</h3>
 <pre tabindex="0"><code>import os

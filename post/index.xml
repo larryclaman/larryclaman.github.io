@@ -126,7 +126,7 @@ pip install -r requirements.txt # only run once
 python send_messages.py 100 # adds 100 messages into the queue
 &lt;/code&gt;&lt;/pre&gt;&lt;p&gt;At this point, KEDA will create up to &lt;em&gt;MaxReplicaCount&lt;/em&gt; jobs (50, per our configuration) to process the messages which have been placed in the storage queue.  As each job will consume 2Gb of memory, very quickly the jobs will not be schedulable, and the Cluster Autoscaler will kick in to scale out the cluster.  As jobs complete, KEDA will schedule new ones until it runs out of work (eg, the queue is empty).  You can watch jobs being automatically scheduled using the command:&lt;/p&gt;
 &lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;kubectl get jobs
-&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;In the next blog post, we&amp;rsquo;ll cover some additional tweaking that can be added to this configuration in support of long running jobs.&lt;/p&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;p&gt;In the next &lt;a href=&#34;2021-11-19-21-keda2.md&#34;&gt;blog post&lt;/a&gt;, we&amp;rsquo;ll cover some additional tweaking that can be added to this configuration to support long running jobs.&lt;/p&gt;
 &lt;h2 id=&#34;code-samples&#34;&gt;Code Samples&lt;/h2&gt;
 &lt;h3 id=&#34;queue-consumer&#34;&gt;Queue Consumer&lt;/h3&gt;
 &lt;pre tabindex=&#34;0&#34;&gt;&lt;code&gt;import os
