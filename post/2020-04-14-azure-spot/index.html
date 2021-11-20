@@ -1,218 +1,241 @@
 <!DOCTYPE html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8"/>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0">
-		<meta name="generator" content="Hugo 0.89.4" />
-		<title>Converting an Azure VM to a Spot type - Larry Claman&#39;s Blog</title>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>Converting an Azure VM to a Spot type - Larry Claman&#39;s Blog</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Converting an Azure VM to a Spot type" />
+<meta property="og:description" content="Convert an Azure VM to a Spot type using a PowerShell script" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://larryclaman.github.io/post/2020-04-14-azure-spot/" /><meta property="article:section" content="post" />
+<meta property="article:published_time" content="2020-04-14T20:16:12-04:00" />
+<meta property="article:modified_time" content="2020-04-14T20:16:12-04:00" />
 
-		<meta name="description" content="Convert an Azure VM to a Spot type using a PowerShell script">
 
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
 
-		
+	<link rel="stylesheet" href="/css/style.css">
 	
+
+	<link rel="shortcut icon" href="/favicon.ico">
 		
-
-
-
-
-<link rel="stylesheet" href="/css/ui.css">
-
-	
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
 		
-
-		<link  rel="stylesheet" href="https://fonts.googleapis.com/css?family=Fira+Mono|Lato|Raleway">
-
-		
-		<script type="text/javascript">
-			(function(c,l,a,r,i,t,y){
-				c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-				t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-				y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-			})(window, document, "clarity", "script", "44j7jjbeip");
-		</script>
-			
-
-		
-	</head>
-
-<body>
-<header class="container no-print">
-	<div class="u-header">
-		<nav class="bar">
-	<ul><li>
-			<a href="/">
-				<img class="icon-text" src="/img/prev.svg"/>
-			</a>
-		</li><li><a href="/">Blog</a></li></ul>
-</nav>
-
+	<div class="logo">
+		<a class="logo__link" href="/" title="Larry Claman&#39;s Blog" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">Larry Claman&#39;s Blog</div>
+					<div class="logo__tagline">Azure, Cloud, and other tech</div>
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
 	</div>
 </header>
-<main class="container">
-
-<article>
-	<header><hgroup id="brand">
-	<h1>Converting an Azure VM to a Spot type</h1>
-	<h5>
-		
-		<time datetime="2020-04-14 20:16:12 -0400 -0400">Apr 14, 2020</time>
-		<span class="no-print">
-			-
-				
-				<a href="/tags/azure">azure</a>
-				<span>
-	</h5>
-	
-</hgroup>
-<hr class="sep" />
-</header>
-	<p>The Azure team recently announced support for <a href="https://azure.microsoft.com/en-us/blog/announcing-the-preview-of-azure-spot-virtual-machines/">Spot Virtual Machines</a>.  In case you&rsquo;re not familiar, <em>&ldquo;Azure Spot Virtual Machines provide access to unused Azure compute capacity at deep discounts.&quot;</em>  The tradeoff is, a Spot VM can be evicted at any time.</p>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Converting an Azure VM to a Spot type</h1>
+			<div class="post__meta meta">
+<div class="meta__item-datetime meta__item">
+	<svg class="meta__icon icon icon-time" width="16" height="14" viewBox="0 0 30 28"><path d="M15 0C7 0 1 6 1 14s6 14 14 14 14-6 14-14S23 0 15 0zm0 25C9 25 4 20 4 14S9 3 15 3s11 5 11 11-5 11-11 11zm1-18h-2v8.4l6.8 4.4L22 18l-6-3.8V7z"/></svg><time class="meta__text" datetime="2020-04-14T20:16:12-04:00">April 14, 2020</time></div></div>
+		</header>
+		<div class="content post__content clearfix">
+			<p>The Azure team recently announced support for <a href="https://azure.microsoft.com/en-us/blog/announcing-the-preview-of-azure-spot-virtual-machines/">Spot Virtual Machines</a>.  In case you&rsquo;re not familiar, <em>&ldquo;Azure Spot Virtual Machines provide access to unused Azure compute capacity at deep discounts.&quot;</em>  The tradeoff is, a Spot VM can be evicted at any time.</p>
 <p>Currently, there&rsquo;s no way to dynamically change an existing VM type to become a Spot.  However, using PowerShell, you can perform some &lsquo;magic&rsquo; to reprovision an existing VM as a new Spot instance.</p>
 <p>Here&rsquo;s the script I put together:</p>
-<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-powershell" data-lang="powershell"><span class="cm">&lt;# Convert a VM to a Spot VM
-</span><span class="cm">Based on sample script at https://docs.microsoft.com/en-us/azure/virtual-machines/windows/change-availability-set
-</span><span class="cm">NOTE:  Extensions will not be copied to new instance!!
-</span><span class="cm">#&gt;</span>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-powershell" data-lang="powershell"><span style="color:#75715e">&lt;# Convert a VM to a Spot VM
+</span><span style="color:#75715e">Based on sample script at https://docs.microsoft.com/en-us/azure/virtual-machines/windows/change-availability-set
+</span><span style="color:#75715e">NOTE:  Extensions will not be copied to new instance!!
+</span><span style="color:#75715e">#&gt;</span>
 
-<span class="c"># Set variables to your specifics</span>
-<span class="nv">$resourceGroup</span> <span class="p">=</span> <span class="s2">&#34;myRG&#34;</span>
-<span class="nv">$vmName</span> <span class="p">=</span> <span class="s2">&#34;myVM&#34;</span>
+<span style="color:#75715e"># Set variables to your specifics</span>
+$resourceGroup = <span style="color:#e6db74">&#34;myRG&#34;</span>
+$vmName = <span style="color:#e6db74">&#34;myVM&#34;</span>
 
-<span class="c"># Get the details of the VM to be moved to the Availability Set</span>
-<span class="nv">$originalVM</span> <span class="p">=</span> <span class="nb">Get-AzVM</span> <span class="p">`</span>
-       <span class="n">-ResourceGroupName</span> <span class="nv">$resourceGroup</span> <span class="p">`</span>
-       <span class="n">-Name</span> <span class="nv">$vmName</span>
+<span style="color:#75715e"># Get the details of the VM to be moved to the Availability Set</span>
+$originalVM = Get-AzVM `
+       -ResourceGroupName $resourceGroup `
+       -Name $vmName
  
-<span class="c"># Create the basic configuration for the replacement VM. </span>
-<span class="nv">$newVM</span> <span class="p">=</span> <span class="nb">New-AzVMConfig</span> <span class="p">`</span>
-       <span class="n">-VMName</span> <span class="nv">$originalVM</span><span class="p">.</span><span class="n">Name</span> <span class="p">`</span>
-       <span class="n">-VMSize</span> <span class="nv">$originalVM</span><span class="p">.</span><span class="n">HardwareProfile</span><span class="p">.</span><span class="n">VmSize</span> <span class="p">`</span>
-       <span class="n">-Priority</span> <span class="s2">&#34;Spot&#34;</span> <span class="n">-MaxPrice</span> <span class="p">-</span><span class="n">1</span>
+<span style="color:#75715e"># Create the basic configuration for the replacement VM. </span>
+$newVM = New-AzVMConfig `
+       -VMName $originalVM.Name `
+       -VMSize $originalVM.HardwareProfile.VmSize `
+       -Priority <span style="color:#e6db74">&#34;Spot&#34;</span> -MaxPrice -1
 
-<span class="c"># Confgure OS Disk</span>
-<span class="nb">Set-AzVMOSDisk</span> <span class="p">`</span>
-       <span class="n">-VM</span> <span class="nv">$newVM</span> <span class="n">-CreateOption</span> <span class="n">Attach</span> <span class="p">`</span>
-       <span class="n">-ManagedDiskId</span> <span class="nv">$originalVM</span><span class="p">.</span><span class="n">StorageProfile</span><span class="p">.</span><span class="n">OsDisk</span><span class="p">.</span><span class="n">ManagedDisk</span><span class="p">.</span><span class="n">Id</span> <span class="p">`</span>
-       <span class="n">-Name</span> <span class="nv">$originalVM</span><span class="p">.</span><span class="n">StorageProfile</span><span class="p">.</span><span class="n">OsDisk</span><span class="p">.</span><span class="n">Name</span> 
+<span style="color:#75715e"># Confgure OS Disk</span>
+Set-AzVMOSDisk `
+       -VM $newVM -CreateOption Attach `
+       -ManagedDiskId $originalVM.StorageProfile.OsDisk.ManagedDisk.Id `
+       -Name $originalVM.StorageProfile.OsDisk.Name 
 
-<span class="k">if</span> <span class="p">(</span><span class="nv">$originalVM</span><span class="p">.</span><span class="n">OSProfile</span><span class="p">.</span><span class="n">WindowsConfiguration</span><span class="p">)</span> <span class="p">{</span>
-    <span class="nv">$newVM</span><span class="p">.</span><span class="n">StorageProfile</span><span class="p">.</span><span class="n">OsDisk</span><span class="p">.</span><span class="n">OsType</span><span class="p">=</span><span class="s2">&#34;Windows&#34;</span> 
-    <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
-    <span class="nv">$newVM</span><span class="p">.</span><span class="n">StorageProfile</span><span class="p">.</span><span class="n">OsDisk</span><span class="p">.</span><span class="n">OsType</span><span class="p">=</span><span class="s2">&#34;Linux&#34;</span>
-    <span class="p">}</span>  
+<span style="color:#66d9ef">if</span> ($originalVM.OSProfile.WindowsConfiguration) {
+    $newVM.StorageProfile.OsDisk.OsType=<span style="color:#e6db74">&#34;Windows&#34;</span> 
+    } <span style="color:#66d9ef">else</span> {
+    $newVM.StorageProfile.OsDisk.OsType=<span style="color:#e6db74">&#34;Linux&#34;</span>
+    }  
 
-<span class="c"># Add Data Disks</span>
-<span class="k">foreach</span> <span class="p">(</span><span class="nv">$disk</span> <span class="k">in</span> <span class="nv">$originalVM</span><span class="p">.</span><span class="n">StorageProfile</span><span class="p">.</span><span class="n">DataDisks</span><span class="p">)</span> <span class="p">{</span> 
-    <span class="nb">Add-AzVMDataDisk</span> <span class="n">-VM</span> <span class="nv">$newVM</span> <span class="p">`</span>
-       <span class="n">-Name</span> <span class="nv">$disk</span><span class="p">.</span><span class="n">Name</span> <span class="p">`</span>
-       <span class="n">-ManagedDiskId</span> <span class="nv">$disk</span><span class="p">.</span><span class="n">ManagedDisk</span><span class="p">.</span><span class="n">Id</span> <span class="p">`</span>
-       <span class="n">-Caching</span> <span class="nv">$disk</span><span class="p">.</span><span class="n">Caching</span> <span class="p">`</span>
-       <span class="n">-Lun</span> <span class="nv">$disk</span><span class="p">.</span><span class="n">Lun</span> <span class="p">`</span>
-       <span class="n">-DiskSizeInGB</span> <span class="nv">$disk</span><span class="p">.</span><span class="n">DiskSizeGB</span> <span class="p">`</span>
-       <span class="n">-CreateOption</span> <span class="n">Attach</span>
-    <span class="p">}</span>
+<span style="color:#75715e"># Add Data Disks</span>
+<span style="color:#66d9ef">foreach</span> ($disk <span style="color:#66d9ef">in</span> $originalVM.StorageProfile.DataDisks) { 
+    Add-AzVMDataDisk -VM $newVM `
+       -Name $disk.Name `
+       -ManagedDiskId $disk.ManagedDisk.Id `
+       -Caching $disk.Caching `
+       -Lun $disk.Lun `
+       -DiskSizeInGB $disk.DiskSizeGB `
+       -CreateOption Attach
+    }
     
-<span class="c"># Add NIC(s) and keep the same NIC as primary</span>
-<span class="k">foreach</span> <span class="p">(</span><span class="nv">$nic</span> <span class="k">in</span> <span class="nv">$originalVM</span><span class="p">.</span><span class="n">NetworkProfile</span><span class="p">.</span><span class="n">NetworkInterfaces</span><span class="p">)</span> <span class="p">{</span>    
-    <span class="k">if</span> <span class="p">(</span><span class="nv">$nic</span><span class="p">.</span><span class="n">Primary</span> <span class="o">-eq</span> <span class="s2">&#34;True&#34;</span><span class="p">)</span>
-        <span class="p">{</span>
-            <span class="nb">Add-AzVMNetworkInterface</span> <span class="p">`</span>
-               <span class="n">-VM</span> <span class="nv">$newVM</span> <span class="p">`</span>
-               <span class="n">-Id</span> <span class="nv">$nic</span><span class="p">.</span><span class="n">Id</span> <span class="n">-Primary</span>
-               <span class="p">}</span>
-           <span class="k">else</span>
-               <span class="p">{</span>
-                 <span class="nb">Add-AzVMNetworkInterface</span> <span class="p">`</span>
-                <span class="n">-VM</span> <span class="nv">$newVM</span> <span class="p">`</span>
-                 <span class="n">-Id</span> <span class="nv">$nic</span><span class="p">.</span><span class="n">Id</span> 
-                <span class="p">}</span>
-      <span class="p">}</span>
+<span style="color:#75715e"># Add NIC(s) and keep the same NIC as primary</span>
+<span style="color:#66d9ef">foreach</span> ($nic <span style="color:#66d9ef">in</span> $originalVM.NetworkProfile.NetworkInterfaces) {    
+    <span style="color:#66d9ef">if</span> ($nic.Primary <span style="color:#f92672">-eq</span> <span style="color:#e6db74">&#34;True&#34;</span>)
+        {
+            Add-AzVMNetworkInterface `
+               -VM $newVM `
+               -Id $nic.Id -Primary
+               }
+           <span style="color:#66d9ef">else</span>
+               {
+                 Add-AzVMNetworkInterface `
+                -VM $newVM `
+                 -Id $nic.Id 
+                }
+      }
 
-<span class="k">if</span> <span class="p">(</span><span class="nv">$originalVM</span><span class="p">.</span><span class="n">AvailabilitySetReference</span><span class="p">.</span><span class="n">Id</span><span class="p">)</span> <span class="p">{</span>
-    <span class="nb">echo </span><span class="s2">&#34;Warning: VM $originalVM.Name is in an availability set.  Spot VMs cannot run in availability sets.&#34;</span>
-    <span class="p">}</span>
+<span style="color:#66d9ef">if</span> ($originalVM.AvailabilitySetReference.Id) {
+    echo <span style="color:#e6db74">&#34;Warning: VM $originalVM.Name is in an availability set.  Spot VMs cannot run in availability sets.&#34;</span>
+    }
 
-<span class="c"># Remove the original VM</span>
-<span class="nb">Remove-AzVM</span> <span class="n">-ResourceGroupName</span> <span class="nv">$resourceGroup</span> <span class="n">-Name</span> <span class="nv">$vmName</span>   
+<span style="color:#75715e"># Remove the original VM</span>
+Remove-AzVM -ResourceGroupName $resourceGroup -Name $vmName   
 
-<span class="c"># Recreate the VM</span>
-<span class="nb">New-AzVM</span> <span class="p">`</span>
-       <span class="n">-ResourceGroupName</span> <span class="nv">$resourceGroup</span> <span class="p">`</span>
-       <span class="n">-Location</span> <span class="nv">$originalVM</span><span class="p">.</span><span class="n">Location</span> <span class="p">`</span>
-       <span class="n">-VM</span> <span class="nv">$newVM</span> <span class="p">`</span>
-       <span class="n">-DisableBginfoExtension</span>
+<span style="color:#75715e"># Recreate the VM</span>
+New-AzVM `
+       -ResourceGroupName $resourceGroup `
+       -Location $originalVM.Location `
+       -VM $newVM `
+       -DisableBginfoExtension
 </code></pre></div>
-</article>
-<nav class="no-print post-nav">
+		</div>
+		<footer class="post__footer">
+			
+<div class="post__tags tags clearfix">
+	<svg class="tags__badge icon icon-tag" width="16" height="16" viewBox="0 0 32 32"><path d="M32 19c0 1-1 2-1 2L21 31s-1 1-2 1-2-1-2-1L2 16c-1-1-1.4-2-1.4-2S0 12.5 0 11V3C0 1.5.8.8.8.8S1.5 0 3 0h8c1.5 0 3 .6 3 .6S15 1 16 2l15 15s1 1 1 2zM7 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>
+	<ul class="tags__list">
+		<li class="tags__item">
+			<a class="tags__link btn" href="/tags/azure/" rel="tag">azure</a>
+		</li>
+	</ul>
+</div>
+		</footer>
+	</article>
+</main>
 
-	<a class="prev-post" href="https://larryclaman.github.io/post/2020-04-09-querying-for-azure-regional-pairs/">
-		<img class="icon-text" src="/img/prev.svg"/>Querying for Azure Regional Pairs</a>
+<div class="authorbox clearfix">
+	<figure class="authorbox__avatar">
+		<img alt="Larry Claman avatar" src="/img/avatar.png" class="avatar" height="90" width="90">
+	</figure>
+	<div class="authorbox__header">
+		<span class="authorbox__name">About Larry Claman</span>
+	</div>
+	<div class="authorbox__description">
+		I hack on the cloud at Microsoft
+	</div>
+</div>
 
-
-	<a class="next-post" href="https://larryclaman.github.io/post/2020-11-15-dependabot/">Create Issues Automatically with Dependabot<img class="icon-text" src="/img/next.svg"/>
-	</a>
-
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/post/2020-04-09-querying-for-azure-regional-pairs/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Querying for Azure Regional Pairs</p>
+		</a>
+	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/post/2020-11-15-dependabot/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Create Issues Automatically with Dependabot</p>
+		</a>
+	</div>
 </nav>
 
-
-<section id="related">
-  <h4>See Also</h4>
-  <ul>
+<section class="comments">
+	<div id="disqus_thread"></div>
+<script type="application/javascript">
+    var disqus_config = function () {
     
-  	<li><a href="/post/2020-04-09-querying-for-azure-regional-pairs/">Querying for Azure Regional Pairs</a></li>
-  	
-  </ul>
+    
+    
+    };
+    (function() {
+        if (["localhost", "127.0.0.1"].indexOf(window.location.hostname) != -1) {
+            document.getElementById('disqus_thread').innerHTML = 'Disqus comments not available by default when the website is previewed locally.';
+            return;
+        }
+        var d = document, s = d.createElement('script'); s.async = true;
+        s.src = '//' + "larryclamanblog" + '.disqus.com/embed.js';
+        s.setAttribute('data-timestamp', +new Date());
+        (d.head || d.body).appendChild(s);
+    })();
+</script>
+<noscript>Please enable JavaScript to view the <a href="https://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+<a href="https://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
 </section>
 
 
-
-
-	<div id="disqus_thread" class="no-print"></div>
-<script type="text/javascript">
-
-(function() {
-    
-    
-    if (window.location.hostname == "localhost")
-        return;
-
-    var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
-    var disqus_shortname = 'larryclamanblog';
-    dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
-    (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
-})();
-</script>
-<noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
-
-
-			<hr class="sep" />
-		</main>
-		<footer class="container no-print">
-			<div class="u-footer">
-				
-
-<a href="https://github.com/larryclaman/"><img class="icon-social" src="/img/github.svg" alt="Github"/></a>
-
-
-<a href="https://larryclaman.github.io/index.xml" target="_blank"><img class="icon-social" src="/img/feed.svg" alt="Feed"></a>
-
-				<p>
-					
-					
-					
-				</p>
-				
-				<a href="#brand">
-					<img class="icon-text" src="/img/toup.svg" alt="To Up"/>
-					<span>Back to Top</span>
-				</a>
-				
 			</div>
-		</footer>
+			<aside class="sidebar">
+<div class="widget-recent widget">
+	<h4 class="widget__title">Recent Posts</h4>
+	<div class="widget__content">
+		<ul class="widget__list">
+			<li class="widget__item"><a class="widget__link" href="/post/2021-11-19-21-keda2/">Kubernetes &amp; long running batch Jobs</a></li>
+			<li class="widget__item"><a class="widget__link" href="/post/2021-11-14-21-keda/">KEDA, Windows, and Batch Jobs</a></li>
+			<li class="widget__item"><a class="widget__link" href="/post/2021-08-19-21-bicep-uami/">Azure Bicep &amp; User Assigned Managed Identity</a></li>
+			<li class="widget__item"><a class="widget__link" href="/post/2021-04-04-aks-dns-naming/">Easily create DNS names with Azure Kubernetes Service</a></li>
+			<li class="widget__item"><a class="widget__link" href="/post/2020-11-15-dependabot/">Create Issues Automatically with Dependabot</a></li>
+		</ul>
+	</div>
+</div>
+<div class="widget-taglist widget">
+	<h4 class="widget__title">Tags</h4>
+	<div class="widget__content">
+		<a class="widget-taglist__link widget__link btn" href="/tags/aks/" title="aks">aks</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/azure/" title="azure">azure</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/azure-devops/" title="azure-devops">azure-devops</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/bicep/" title="bicep">bicep</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/docker/" title="docker">docker</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/github/" title="github">github</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/identity/" title="identity">identity</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/keda/" title="keda">keda</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/kubernetes/" title="kubernetes">kubernetes</a>
+	</div>
+</div>
+</aside>
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
 		
-	
-
+		<div class="footer__copyright">
+			&copy; 2021 Larry Claman&#39;s Blog.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+	</div>
+<script async defer src="/js/menu.js"></script>
 </body>
 </html>
-
