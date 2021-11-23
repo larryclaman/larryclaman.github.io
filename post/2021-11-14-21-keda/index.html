@@ -80,15 +80,22 @@ az aks create <span style="color:#ae81ff">\
 
 az aks get-credentials -g $RG -n $CLUSTER_NAME
 </code></pre></div><p>One of the things we&rsquo;re going to do for this use case is use the new AKS <a href="https://docs.microsoft.com/en-us/azure/aks/scale-down-mode">deallocate</a> scale down mode to improve scale out performance.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">az aks nodepool update --scale-down-mode Deallocate --name nodepool1  --cluster-name $CLUSTER_NAME --resource-group $RG
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">az aks nodepool update <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>  --scale-down-mode Deallocate <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>   --name nodepool1  <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>   --cluster-name $CLUSTER_NAME <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>   --resource-group $RG
 </code></pre></div><p>Let&rsquo;s install KEDA:</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">helm repo add kedacore https://kedacore.github.io/charts
 helm repo update
 kubectl create namespace keda
 helm install keda kedacore/keda --version 2.4.0 --namespace keda
 </code></pre></div><p>And finally, let&rsquo;s add a Windows node pool:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">az aks nodepool add -g $RG --cluster-name $CLUSTER_NAME -n win1  --os-type Windows <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>   --enable-cluster-autoscaler --min-count <span style="color:#ae81ff">0</span> --max-count <span style="color:#ae81ff">10</span> --scale-down-mode Deallocate
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">az aks nodepool add -g $RG --cluster-name $CLUSTER_NAME -n win1  <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>   --os-type Windows <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>   --enable-cluster-autoscaler <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>   --min-count <span style="color:#ae81ff">0</span> --max-count <span style="color:#ae81ff">10</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>   --scale-down-mode Deallocate
 </code></pre></div><h3 id="storage-queue">Storage Queue</h3>
 <p>Now we need to set up the storage queue:</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">STORAGE_ACCOUNT_NAME<span style="color:#f92672">=</span>kedademo <span style="color:#75715e"># set to your storage acct name; must be globally unique</span>
