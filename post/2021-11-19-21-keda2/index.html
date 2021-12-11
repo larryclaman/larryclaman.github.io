@@ -118,7 +118,7 @@
 
 </code></pre></div><p>And, Voila!  You will now be able to keep your jobs running for <strong>activeDeadlineSeconds</strong>!</p>
 <h3 id="preventing-the-ca-from-evicting-pods">Preventing the CA from evicting pods</h3>
-<p>The pod disruption budget is a great general purpose solution that will work with any workload: jobs, deployments,etc.  However, if your workload is only Jobs (Keda scheduled or otherwise), there is a simpler method you can use.  In this case, there&rsquo;s no HPA involved; rather, we just want to prevent the cluster autoscaler from scaling down a node with a long running job.</p>
+<p>The pod disruption budget is a great general purpose solution that will work with any workload: jobs, deployments,etc.  However, if all you want to prevent is pods being evicted when a node is set to drain, (eg, prevent the cluster autoscaler from scaling down a node with a long running job) there is a simpler method you can use.</p>
 <p>To achieve this, you can simply set an annotation on your pod as:
 <code>&quot;cluster-autoscaler.kubernetes.io/safe-to-evict&quot;: &quot;false&quot;</code></p>
 <p>Specifically:</p>
