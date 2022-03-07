@@ -80,42 +80,42 @@ West US               37.783      -122.417     westus
 <p>All hope is not lost!  You can find the region&rsquo;s pair, but you need to query the Azure REST api directly, as documented at <a href="https://docs.microsoft.com/en-us/rest/api/resources/Subscriptions/ListLocations">https://docs.microsoft.com/en-us/rest/api/resources/Subscriptions/ListLocations</a>.  In the past, you&rsquo;d need to fire up your favorite REST client (eg, <a href="https://github.com/projectkudu/ARMClient">armclient</a>, Vscode + <a href="https://marketplace.visualstudio.com/items?itemName=humao.rest-client">rest client extension</a>, Postman, etc), but in exploring this, I learned an easier way:  You can now make Azure REST calls directly from the CLI!  Here&rsquo;s what that looks like:   <em>(Replace {yoursubid} with your specific subscription id)</em></p>
 <pre tabindex="0"><code>az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output json
 {
-  &quot;value&quot;: [
+  &#34;value&#34;: [
     {
-      &quot;displayName&quot;: &quot;East US&quot;,
-      &quot;id&quot;: &quot;/subscriptions/{yoursubid}/locations/eastus&quot;,
-      &quot;metadata&quot;: {
-        &quot;geographyGroup&quot;: &quot;US&quot;,
-        &quot;latitude&quot;: &quot;37.3719&quot;,
-        &quot;longitude&quot;: &quot;-79.8164&quot;,
-        &quot;pairedRegion&quot;: [
+      &#34;displayName&#34;: &#34;East US&#34;,
+      &#34;id&#34;: &#34;/subscriptions/{yoursubid}/locations/eastus&#34;,
+      &#34;metadata&#34;: {
+        &#34;geographyGroup&#34;: &#34;US&#34;,
+        &#34;latitude&#34;: &#34;37.3719&#34;,
+        &#34;longitude&#34;: &#34;-79.8164&#34;,
+        &#34;pairedRegion&#34;: [
           {
-            &quot;id&quot;: &quot;/subscriptions/{yoursubid}/locations/westus&quot;,
-            &quot;name&quot;: &quot;westus&quot;
+            &#34;id&#34;: &#34;/subscriptions/{yoursubid}/locations/westus&#34;,
+            &#34;name&#34;: &#34;westus&#34;
           }
         ],
-        &quot;physicalLocation&quot;: &quot;Virginia&quot;,
-        &quot;regionCategory&quot;: &quot;Recommended&quot;,
-        &quot;regionType&quot;: &quot;Physical&quot;
+        &#34;physicalLocation&#34;: &#34;Virginia&#34;,
+        &#34;regionCategory&#34;: &#34;Recommended&#34;,
+        &#34;regionType&#34;: &#34;Physical&#34;
       },
-      &quot;name&quot;: &quot;eastus&quot;,
-      &quot;regionalDisplayName&quot;: &quot;(US) East US&quot;
+      &#34;name&#34;: &#34;eastus&#34;,
+      &#34;regionalDisplayName&#34;: &#34;(US) East US&#34;
     },
 [snip]
 </code></pre><p>What&rsquo;s really cool is you can use the CLI&rsquo;s built-in jmespath query engine to filter and massage the results, eg: <em>(Column1 is the region, and Column2 is the pair)</em></p>
-<pre tabindex="0"><code>az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output table --query 'value[].[name,metadata.pairedRegion[].name]'
+<pre tabindex="0"><code>az rest --method GET --uri https://management.azure.com/subscriptions/{yoursubid}/locations?api-version=2020-01-01 --output table --query &#39;value[].[name,metadata.pairedRegion[].name]&#39;
 
 Column1              Column2
 -------------------  ----------------------
-eastus               ['westus']
-eastus2              ['centralus']
-southcentralus       ['northcentralus']
-westus2              ['westcentralus']
-australiaeast        ['australiasoutheast']
+eastus               [&#39;westus&#39;]
+eastus2              [&#39;centralus&#39;]
+southcentralus       [&#39;northcentralus&#39;]
+westus2              [&#39;westcentralus&#39;]
+australiaeast        [&#39;australiasoutheast&#39;]
 [snip]
 </code></pre><p>(I&rsquo;m still working on my jmespath ninja skills, so there&rsquo;s still a little cleanup to be done on this table, but it gets the point across.)</p>
 <p>EDIT Feb 2021:  Subsequent to my posting this blog, it appears that you now CAN indeed get the pair info directly from the AZ cli.  Example:</p>
-<pre tabindex="0"><code>az account list-locations -o table --query '[].[displayName, name, metadata.physicalLocation, metadata.regionCategory,metadata.pairedRegion[0].name]'
+<pre tabindex="0"><code>az account list-locations -o table --query &#39;[].[displayName, name, metadata.physicalLocation, metadata.regionCategory,metadata.pairedRegion[0].name]&#39;
 </code></pre>
 		</div>
 		<footer class="post__footer">
@@ -186,11 +186,11 @@ australiaeast        ['australiasoutheast']
 	<h4 class="widget__title">Recent Posts</h4>
 	<div class="widget__content">
 		<ul class="widget__list">
+			<li class="widget__item"><a class="widget__link" href="/post/2022-03-05-22-nplus1/">Kubernetes Cluster Autoscaler n&#43;1 nodes</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-11-19-21-keda2/">Kubernetes &amp; long running batch Jobs</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-11-14-21-keda/">KEDA, Windows, and Batch Jobs</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-08-19-21-bicep-uami/">Azure Bicep &amp; User Assigned Managed Identity</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-04-04-aks-dns-naming/">Easily create DNS names with Azure Kubernetes Service</a></li>
-			<li class="widget__item"><a class="widget__link" href="/post/2020-11-15-dependabot/">Create Issues Automatically with Dependabot</a></li>
 		</ul>
 	</div>
 </div>

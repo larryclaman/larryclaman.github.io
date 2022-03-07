@@ -61,168 +61,167 @@
 <p>These samples use an illustrative application that places message (eg, &lsquo;jobs&rsquo;) in an Azure Storage queue.  KEDA is then used to schedule Kubernetes jobs using this queue as a trigger.  Also notice we are scheduling <a href="https://kubernetes.io/docs/concepts/workloads/controllers/job/">Kubernetes jobs</a>, not deployments; these work extremely well for this use case but are a little less common than deployments.</p>
 <h3 id="aks-cluster--installing-keda">AKS Cluster &amp; installing KEDA</h3>
 <p>We&rsquo;ll start by creating the AKS cluster:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">RG<span style="color:#f92672">=</span>keda-sample
-LOCATION<span style="color:#f92672">=</span>westus2
-CLUSTER_NAME<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;kedatest&#34;</span>
-az group create -l $LOCATION -n $RG
-
-az aks create <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span> -g $RG <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span> -n $CLUSTER_NAME <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span> --node-count <span style="color:#ae81ff">1</span> <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span> --node-vm-size Standard_DS3_v2 <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span> --generate-ssh-keys <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>  --node-osdisk-type Managed <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>  --enable-cluster-autoscaler <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>  --min-count <span style="color:#ae81ff">1</span> <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>  --max-count <span style="color:#ae81ff">10</span> <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>  --network-plugin azure 
-
-az aks get-credentials -g $RG -n $CLUSTER_NAME
-</code></pre></div><p>One of the things we&rsquo;re going to do for this use case is use the new AKS <a href="https://docs.microsoft.com/en-us/azure/aks/scale-down-mode">deallocate</a> scale down mode to improve scale out performance.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">az aks nodepool update <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>  --scale-down-mode Deallocate <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>   --name nodepool1  <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>   --cluster-name $CLUSTER_NAME <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>   --resource-group $RG
-</code></pre></div><p>Let&rsquo;s install KEDA:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">helm repo add kedacore https://kedacore.github.io/charts
-helm repo update
-kubectl create namespace keda
-helm install keda kedacore/keda --version 2.4.0 --namespace keda
-</code></pre></div><p>And finally, let&rsquo;s add a Windows node pool:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">az aks nodepool add -g $RG --cluster-name $CLUSTER_NAME -n win1  <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>   --os-type Windows <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>   --enable-cluster-autoscaler <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>   --min-count <span style="color:#ae81ff">0</span> --max-count <span style="color:#ae81ff">10</span> <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>   --scale-down-mode Deallocate
-</code></pre></div><h3 id="storage-queue">Storage Queue</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>RG<span style="color:#f92672">=</span>keda-sample
+</span></span><span style="display:flex;"><span>LOCATION<span style="color:#f92672">=</span>westus2
+</span></span><span style="display:flex;"><span>CLUSTER_NAME<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;kedatest&#34;</span>
+</span></span><span style="display:flex;"><span>az group create -l $LOCATION -n $RG
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>az aks create <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span> -g $RG <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span> -n $CLUSTER_NAME <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span> --node-count <span style="color:#ae81ff">1</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span> --node-vm-size Standard_DS3_v2 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span> --generate-ssh-keys <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>  --node-osdisk-type Managed <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>  --enable-cluster-autoscaler <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>  --min-count <span style="color:#ae81ff">1</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>  --max-count <span style="color:#ae81ff">10</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>  --network-plugin azure 
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>az aks get-credentials -g $RG -n $CLUSTER_NAME
+</span></span></code></pre></div><p>One of the things we&rsquo;re going to do for this use case is use the new AKS <a href="https://docs.microsoft.com/en-us/azure/aks/scale-down-mode">deallocate</a> scale down mode to improve scale out performance.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>az aks nodepool update <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>  --scale-down-mode Deallocate <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>   --name nodepool1  <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>   --cluster-name $CLUSTER_NAME <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>   --resource-group $RG
+</span></span></code></pre></div><p>Let&rsquo;s install KEDA:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>helm repo add kedacore https://kedacore.github.io/charts
+</span></span><span style="display:flex;"><span>helm repo update
+</span></span><span style="display:flex;"><span>kubectl create namespace keda
+</span></span><span style="display:flex;"><span>helm install keda kedacore/keda --version 2.4.0 --namespace keda
+</span></span></code></pre></div><p>And finally, let&rsquo;s add a Windows node pool:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>az aks nodepool add -g $RG --cluster-name $CLUSTER_NAME -n win1  <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>   --os-type Windows <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>   --enable-cluster-autoscaler <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>   --min-count <span style="color:#ae81ff">0</span> --max-count <span style="color:#ae81ff">10</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>   --scale-down-mode Deallocate
+</span></span></code></pre></div><h3 id="storage-queue">Storage Queue</h3>
 <p>Now we need to set up the storage queue:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">STORAGE_ACCOUNT_NAME<span style="color:#f92672">=</span>kedademo <span style="color:#75715e"># set to your storage acct name; must be globally unique</span>
-export QUEUE_NAME<span style="color:#f92672">=</span>keda-queue
-az storage account create -g $RG -n $STORAGE_ACCOUNT_NAME
-az storage queue create -n $QUEUE_NAME
-export AzureWebJobsStorage<span style="color:#f92672">=</span><span style="color:#66d9ef">$(</span>az storage account show-connection-string --name $STORAGE_ACCOUNT_NAME --query connectionString -o tsv<span style="color:#66d9ef">)</span>  <span style="color:#75715e"># this env variable will be used later by our application</span>
-
-<span style="color:#75715e"># save the storage account connection string as a Kubernetes Secret</span>
-kubectl create secret generic secrets <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>    --from-literal<span style="color:#f92672">=</span>AzureWebJobsStorage<span style="color:#f92672">=</span>$AzureWebJobsStorage
-</code></pre></div><h3 id="worker-application">Worker application</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>STORAGE_ACCOUNT_NAME<span style="color:#f92672">=</span>kedademo <span style="color:#75715e"># set to your storage acct name; must be globally unique</span>
+</span></span><span style="display:flex;"><span>export QUEUE_NAME<span style="color:#f92672">=</span>keda-queue
+</span></span><span style="display:flex;"><span>az storage account create -g $RG -n $STORAGE_ACCOUNT_NAME
+</span></span><span style="display:flex;"><span>az storage queue create -n $QUEUE_NAME
+</span></span><span style="display:flex;"><span>export AzureWebJobsStorage<span style="color:#f92672">=</span><span style="color:#66d9ef">$(</span>az storage account show-connection-string --name $STORAGE_ACCOUNT_NAME --query connectionString -o tsv<span style="color:#66d9ef">)</span>  <span style="color:#75715e"># this env variable will be used later by our application</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># save the storage account connection string as a Kubernetes Secret</span>
+</span></span><span style="display:flex;"><span>kubectl create secret generic secrets <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --from-literal<span style="color:#f92672">=</span>AzureWebJobsStorage<span style="color:#f92672">=</span>$AzureWebJobsStorage
+</span></span></code></pre></div><h3 id="worker-application">Worker application</h3>
 <p>Next, we need to build a Windows container image with our worker application. I&rsquo;ll use Azure Container registry to do the actual image build.  I&rsquo;ll also share the source code for the application at the end of this blog post.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">export ACR<span style="color:#f92672">=</span>kedatest01  <span style="color:#75715e"># set to your ACR name; must be globally unique</span>
-az acr create -n $ACR -g $RG --sku Standard
-az aks update -n $CLUSTER_NAME -g $RG  --attach-acr $ACR
-
-az acr build -r $ACR -t $ACR.azurecr.io/queue-consumer-windows  --platform windows queue-consumer-windows
-</code></pre></div><h2 id="running-the-sample">Running the sample</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>export ACR<span style="color:#f92672">=</span>kedatest01  <span style="color:#75715e"># set to your ACR name; must be globally unique</span>
+</span></span><span style="display:flex;"><span>az acr create -n $ACR -g $RG --sku Standard
+</span></span><span style="display:flex;"><span>az aks update -n $CLUSTER_NAME -g $RG  --attach-acr $ACR
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>az acr build -r $ACR -t $ACR.azurecr.io/queue-consumer-windows  --platform windows queue-consumer-windows
+</span></span></code></pre></div><h2 id="running-the-sample">Running the sample</h2>
 <p>We&rsquo;re now ready to start using our sample application.  As I mentioned above, we&rsquo;re going to use a KEDA ScaledJob to handle scaling out workers.  Here&rsquo;s the Kubernetes manifest: (which is a file named <em>azurequeue_scaledobject_jobs_windows.yaml</em>)</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#f92672">apiVersion</span>: <span style="color:#ae81ff">keda.sh/v1alpha1</span>
-<span style="color:#f92672">kind</span>: <span style="color:#ae81ff">ScaledJob</span>
-<span style="color:#f92672">metadata</span>:
-  <span style="color:#f92672">name</span>: <span style="color:#ae81ff">azure-queue-scaledobject-jobs-win</span>
-  <span style="color:#f92672">namespace</span>: <span style="color:#ae81ff">default</span>
-<span style="color:#f92672">spec</span>:
-  <span style="color:#f92672">pollingInterval</span>: <span style="color:#ae81ff">30</span>
-  <span style="color:#f92672">maxReplicaCount</span>: <span style="color:#ae81ff">50</span>
-  <span style="color:#f92672">successfulJobsHistoryLimit</span>: <span style="color:#ae81ff">1</span>
-  <span style="color:#f92672">failedJobsHistoryLimit</span>: <span style="color:#ae81ff">1</span>
-  <span style="color:#f92672">jobTargetRef</span>:
-    <span style="color:#f92672">parallelism</span>: <span style="color:#ae81ff">1</span>
-    <span style="color:#f92672">completions</span>: <span style="color:#ae81ff">1</span>
-    <span style="color:#f92672">activeDeadlineSeconds</span>: <span style="color:#ae81ff">600</span>
-    <span style="color:#f92672">backoffLimit</span>: <span style="color:#ae81ff">6</span>
-    <span style="color:#f92672">template</span>:
-      <span style="color:#f92672">spec</span>:
-        <span style="color:#f92672">nodeSelector</span>:
-          <span style="color:#f92672">kubernetes.io/os</span>: <span style="color:#ae81ff">windows</span>
-        <span style="color:#f92672">containers</span>:
-        - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">consumer-job</span>
-          <span style="color:#f92672">image</span>: <span style="color:#ae81ff">$ACR.azurecr.io/queue-consumer-windows</span>
-          <span style="color:#f92672">resources</span>:
-            <span style="color:#f92672">requests</span>:
-              <span style="color:#f92672">cpu</span>: <span style="color:#ae81ff">100m</span>
-              <span style="color:#f92672">memory</span>: <span style="color:#ae81ff">2000Mi</span> <span style="color:#75715e"># intentionally set high in order to trigger cluster autoscaler</span>
-            <span style="color:#f92672">limits</span>:
-              <span style="color:#f92672">cpu</span>: <span style="color:#ae81ff">100m</span>
-              <span style="color:#f92672">memory</span>: <span style="color:#ae81ff">2000Mi</span>
-          <span style="color:#f92672">env</span>:
-          - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
-            <span style="color:#f92672">valueFrom</span>:
-              <span style="color:#f92672">secretKeyRef</span>:
-                <span style="color:#f92672">name</span>: <span style="color:#ae81ff">secrets</span>
-                <span style="color:#f92672">key</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
-          - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">QUEUE_NAME</span>
-            <span style="color:#f92672">value</span>: <span style="color:#ae81ff">keda-queue</span>
-  <span style="color:#f92672">triggers</span>:
-  - <span style="color:#f92672">type</span>: <span style="color:#ae81ff">azure-queue</span>
-    <span style="color:#f92672">metadata</span>:
-      <span style="color:#f92672">queueName</span>: <span style="color:#ae81ff">keda-queue</span>
-      <span style="color:#f92672">queueLength</span>: <span style="color:#e6db74">&#39;1&#39;</span>
-      <span style="color:#f92672">connectionFromEnv</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
-</code></pre></div><p>Deploy this as follows:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">cat azurequeue_scaledobject_jobs_windows.yaml| envsubst | kubectl apply -f -
-</code></pre></div><p>Notice in the above that I&rsquo;m using the tool <code>envsubst</code> to dynamically insert the value of the $ACR environment variable into the manifest.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#f92672">apiVersion</span>: <span style="color:#ae81ff">keda.sh/v1alpha1</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">kind</span>: <span style="color:#ae81ff">ScaledJob</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">name</span>: <span style="color:#ae81ff">azure-queue-scaledobject-jobs-win</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">namespace</span>: <span style="color:#ae81ff">default</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">spec</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">pollingInterval</span>: <span style="color:#ae81ff">30</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">maxReplicaCount</span>: <span style="color:#ae81ff">50</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">successfulJobsHistoryLimit</span>: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">failedJobsHistoryLimit</span>: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">jobTargetRef</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">parallelism</span>: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">completions</span>: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">activeDeadlineSeconds</span>: <span style="color:#ae81ff">600</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">backoffLimit</span>: <span style="color:#ae81ff">6</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">template</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">spec</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">nodeSelector</span>:
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">kubernetes.io/os</span>: <span style="color:#ae81ff">windows</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">containers</span>:
+</span></span><span style="display:flex;"><span>        - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">consumer-job</span>
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">image</span>: <span style="color:#ae81ff">$ACR.azurecr.io/queue-consumer-windows</span>
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">resources</span>:
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">requests</span>:
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">cpu</span>: <span style="color:#ae81ff">100m</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">memory</span>: <span style="color:#ae81ff">2000Mi</span> <span style="color:#75715e"># intentionally set high in order to trigger cluster autoscaler</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">limits</span>:
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">cpu</span>: <span style="color:#ae81ff">100m</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">memory</span>: <span style="color:#ae81ff">2000Mi</span>
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">env</span>:
+</span></span><span style="display:flex;"><span>          - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">valueFrom</span>:
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">secretKeyRef</span>:
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">name</span>: <span style="color:#ae81ff">secrets</span>
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">key</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
+</span></span><span style="display:flex;"><span>          - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">QUEUE_NAME</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">value</span>: <span style="color:#ae81ff">keda-queue</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">triggers</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#f92672">type</span>: <span style="color:#ae81ff">azure-queue</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">metadata</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">queueName</span>: <span style="color:#ae81ff">keda-queue</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">queueLength</span>: <span style="color:#e6db74">&#39;1&#39;</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">connectionFromEnv</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
+</span></span></code></pre></div><p>Deploy this as follows:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>cat azurequeue_scaledobject_jobs_windows.yaml| envsubst | kubectl apply -f -
+</span></span></code></pre></div><p>Notice in the above that I&rsquo;m using the tool <code>envsubst</code> to dynamically insert the value of the $ACR environment variable into the manifest.</p>
 <p>And finally, run the python app to load up the queue with work (100 messages):</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">python3 -m venv .venv <span style="color:#75715e"># only run once</span>
-source .venv/bin/activate
-pip install -r requirements.txt <span style="color:#75715e"># only run once</span>
-
-python send_messages.py <span style="color:#ae81ff">100</span> <span style="color:#75715e"># adds 100 messages into the queue</span>
-</code></pre></div><p>At this point, KEDA will create up to <em>MaxReplicaCount</em> jobs (50, per our configuration) to process the messages which have been placed in the storage queue.  As each job will consume 2Gb of memory, very quickly the jobs will not be schedulable, and the Cluster Autoscaler will kick in to scale out the cluster.  As jobs complete, KEDA will schedule new ones until it runs out of work (eg, the queue is empty).  You can watch jobs being automatically scheduled using the command:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">kubectl get jobs
-</code></pre></div><p>In the next <a href="2021-11-19-21-keda2.md">blog post</a>, we&rsquo;ll cover some additional tweaking that can be added to this configuration to support long running jobs.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>python3 -m venv .venv <span style="color:#75715e"># only run once</span>
+</span></span><span style="display:flex;"><span>source .venv/bin/activate
+</span></span><span style="display:flex;"><span>pip install -r requirements.txt <span style="color:#75715e"># only run once</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>python send_messages.py <span style="color:#ae81ff">100</span> <span style="color:#75715e"># adds 100 messages into the queue</span>
+</span></span></code></pre></div><p>At this point, KEDA will create up to <em>MaxReplicaCount</em> jobs (50, per our configuration) to process the messages which have been placed in the storage queue.  As each job will consume 2Gb of memory, very quickly the jobs will not be schedulable, and the Cluster Autoscaler will kick in to scale out the cluster.  As jobs complete, KEDA will schedule new ones until it runs out of work (eg, the queue is empty).  You can watch jobs being automatically scheduled using the command:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>kubectl get jobs
+</span></span></code></pre></div><p>In the next <a href="2021-11-19-21-keda2.md">blog post</a>, we&rsquo;ll cover some additional tweaking that can be added to this configuration to support long running jobs.</p>
 <h2 id="code-samples">Code Samples</h2>
 <h3 id="queue-consumer">Queue Consumer</h3>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">import</span> os
-<span style="color:#f92672">import</span> time
-<span style="color:#f92672">from</span> azure.storage.queue <span style="color:#f92672">import</span> QueueClient
-
-<span style="color:#66d9ef">try</span>:
-  connection_string <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>environ[<span style="color:#e6db74">&#39;AzureWebJobsStorage&#39;</span>]
-  queue_name <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>environ[<span style="color:#e6db74">&#39;QUEUE_NAME&#39;</span>]
-<span style="color:#66d9ef">except</span> <span style="color:#a6e22e">KeyError</span>:
-  print(<span style="color:#e6db74">&#39;Error: missing environment variable AzureWebJobsStorage or QUEUE_NAME&#39;</span>)
-  exit(<span style="color:#ae81ff">1</span>)
-
-queue <span style="color:#f92672">=</span> QueueClient<span style="color:#f92672">.</span>from_connection_string(conn_str<span style="color:#f92672">=</span>connection_string, queue_name<span style="color:#f92672">=</span>queue_name)
-
-<span style="color:#75715e"># Get a single message</span>
-message <span style="color:#f92672">=</span> next(queue<span style="color:#f92672">.</span>receive_messages())
-
-<span style="color:#75715e"># Print the message</span>
-print(message)
-
-<span style="color:#75715e"># Delete message from the queue</span>
-queue<span style="color:#f92672">.</span>delete_message(message)
-
-<span style="color:#75715e"># Sleep for a while, simulating a long-running job</span>
-time<span style="color:#f92672">.</span>sleep(<span style="color:#ae81ff">30</span>)
-</code></pre></div><h3 id="queue-consumer-dockerfile">Queue Consumer Dockerfile</h3>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-dockerfile" data-lang="dockerfile"><span style="color:#75715e"># 1809 required for AKS</span><span style="color:#960050;background-color:#1e0010">
-</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">FROM</span><span style="color:#e6db74"> python:windowsservercore-1809</span><span style="color:#960050;background-color:#1e0010">
-</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">WORKDIR</span><span style="color:#e6db74"> /app</span><span style="color:#960050;background-color:#1e0010">
-</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> pip install azure-storage-queue<span style="color:#960050;background-color:#1e0010">
-</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">COPY</span> queue_consumer.py /app<span style="color:#960050;background-color:#1e0010">
-</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">CMD</span> [<span style="color:#e6db74">&#34;python&#34;</span>, <span style="color:#e6db74">&#34;queue_consumer.py&#34;</span>]<span style="color:#960050;background-color:#1e0010">
-</span></code></pre></div><h3 id="send_messagespy">send_messages.py</h3>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">import</span> os
-<span style="color:#f92672">import</span> sys
-<span style="color:#f92672">import</span> time
-<span style="color:#f92672">from</span> azure.storage.queue <span style="color:#f92672">import</span> QueueClient
-
-<span style="color:#66d9ef">try</span>:
-  connection_string <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>environ[<span style="color:#e6db74">&#39;AzureWebJobsStorage&#39;</span>]
-  queue_name <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>environ[<span style="color:#e6db74">&#39;QUEUE_NAME&#39;</span>]
-<span style="color:#66d9ef">except</span> <span style="color:#a6e22e">KeyError</span>:
-  print(<span style="color:#e6db74">&#39;Error: missing environment variable AzureWebJobsStorage or QUEUE_NAME&#39;</span>)
-  exit(<span style="color:#ae81ff">1</span>)
-
-queue <span style="color:#f92672">=</span> QueueClient<span style="color:#f92672">.</span>from_connection_string(conn_str<span style="color:#f92672">=</span>connection_string, queue_name<span style="color:#f92672">=</span>queue_name)
-
-<span style="color:#66d9ef">for</span> message <span style="color:#f92672">in</span> range(<span style="color:#ae81ff">0</span>, int(sys<span style="color:#f92672">.</span>argv[<span style="color:#ae81ff">1</span>])):
-  queue<span style="color:#f92672">.</span>send_message(content<span style="color:#f92672">=</span><span style="color:#e6db74">&#39;foo_&#39;</span><span style="color:#f92672">+</span>str(message))
-
-</code></pre></div>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">import</span> os
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> time
+</span></span><span style="display:flex;"><span><span style="color:#f92672">from</span> azure.storage.queue <span style="color:#f92672">import</span> QueueClient
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">try</span>:
+</span></span><span style="display:flex;"><span>  connection_string <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>environ[<span style="color:#e6db74">&#39;AzureWebJobsStorage&#39;</span>]
+</span></span><span style="display:flex;"><span>  queue_name <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>environ[<span style="color:#e6db74">&#39;QUEUE_NAME&#39;</span>]
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">except</span> <span style="color:#a6e22e">KeyError</span>:
+</span></span><span style="display:flex;"><span>  print(<span style="color:#e6db74">&#39;Error: missing environment variable AzureWebJobsStorage or QUEUE_NAME&#39;</span>)
+</span></span><span style="display:flex;"><span>  exit(<span style="color:#ae81ff">1</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>queue <span style="color:#f92672">=</span> QueueClient<span style="color:#f92672">.</span>from_connection_string(conn_str<span style="color:#f92672">=</span>connection_string, queue_name<span style="color:#f92672">=</span>queue_name)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># Get a single message</span>
+</span></span><span style="display:flex;"><span>message <span style="color:#f92672">=</span> next(queue<span style="color:#f92672">.</span>receive_messages())
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># Print the message</span>
+</span></span><span style="display:flex;"><span>print(message)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># Delete message from the queue</span>
+</span></span><span style="display:flex;"><span>queue<span style="color:#f92672">.</span>delete_message(message)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># Sleep for a while, simulating a long-running job</span>
+</span></span><span style="display:flex;"><span>time<span style="color:#f92672">.</span>sleep(<span style="color:#ae81ff">30</span>)
+</span></span></code></pre></div><h3 id="queue-consumer-dockerfile">Queue Consumer Dockerfile</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-dockerfile" data-lang="dockerfile"><span style="display:flex;"><span><span style="color:#75715e"># 1809 required for AKS</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">FROM</span><span style="color:#e6db74"> python:windowsservercore-1809</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">WORKDIR</span><span style="color:#e6db74"> /app</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> pip install azure-storage-queue<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">COPY</span> queue_consumer.py /app<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">CMD</span> [<span style="color:#e6db74">&#34;python&#34;</span>, <span style="color:#e6db74">&#34;queue_consumer.py&#34;</span>]<span style="color:#960050;background-color:#1e0010">
+</span></span></span></code></pre></div><h3 id="send_messagespy">send_messages.py</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">import</span> os
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> sys
+</span></span><span style="display:flex;"><span><span style="color:#f92672">import</span> time
+</span></span><span style="display:flex;"><span><span style="color:#f92672">from</span> azure.storage.queue <span style="color:#f92672">import</span> QueueClient
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">try</span>:
+</span></span><span style="display:flex;"><span>  connection_string <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>environ[<span style="color:#e6db74">&#39;AzureWebJobsStorage&#39;</span>]
+</span></span><span style="display:flex;"><span>  queue_name <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>environ[<span style="color:#e6db74">&#39;QUEUE_NAME&#39;</span>]
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">except</span> <span style="color:#a6e22e">KeyError</span>:
+</span></span><span style="display:flex;"><span>  print(<span style="color:#e6db74">&#39;Error: missing environment variable AzureWebJobsStorage or QUEUE_NAME&#39;</span>)
+</span></span><span style="display:flex;"><span>  exit(<span style="color:#ae81ff">1</span>)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>queue <span style="color:#f92672">=</span> QueueClient<span style="color:#f92672">.</span>from_connection_string(conn_str<span style="color:#f92672">=</span>connection_string, queue_name<span style="color:#f92672">=</span>queue_name)
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#66d9ef">for</span> message <span style="color:#f92672">in</span> range(<span style="color:#ae81ff">0</span>, int(sys<span style="color:#f92672">.</span>argv[<span style="color:#ae81ff">1</span>])):
+</span></span><span style="display:flex;"><span>  queue<span style="color:#f92672">.</span>send_message(content<span style="color:#f92672">=</span><span style="color:#e6db74">&#39;foo_&#39;</span><span style="color:#f92672">+</span>str(message))
+</span></span></code></pre></div>
 		</div>
 		<footer class="post__footer">
 			
@@ -301,11 +300,11 @@ queue <span style="color:#f92672">=</span> QueueClient<span style="color:#f92672
 	<h4 class="widget__title">Recent Posts</h4>
 	<div class="widget__content">
 		<ul class="widget__list">
+			<li class="widget__item"><a class="widget__link" href="/post/2022-03-05-22-nplus1/">Kubernetes Cluster Autoscaler n&#43;1 nodes</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-11-19-21-keda2/">Kubernetes &amp; long running batch Jobs</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-11-14-21-keda/">KEDA, Windows, and Batch Jobs</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-08-19-21-bicep-uami/">Azure Bicep &amp; User Assigned Managed Identity</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-04-04-aks-dns-naming/">Easily create DNS names with Azure Kubernetes Service</a></li>
-			<li class="widget__item"><a class="widget__link" href="/post/2020-11-15-dependabot/">Create Issues Automatically with Dependabot</a></li>
 		</ul>
 	</div>
 </div>

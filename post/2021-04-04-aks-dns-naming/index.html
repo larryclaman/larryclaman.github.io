@@ -58,50 +58,50 @@
 to create a loadbalancer service with public IP address.  Most, if not all, of these examples recommend that you access the service by IP address rather than by using a DNS name.</p>
 <p>I was recently leading a workshop which covered this topic, and I wondered if there was an easy way to get AKS to assign a DNS name for a loadbalancer service.  It turns out, there is, but it&rsquo;s not documented well and is hidden within the AKS documentation.</p>
 <p>The method is documented on <a href="https://docs.microsoft.com/en-us/azure/aks/static-ip#apply-a-dns-label-to-the-service">this page</a>, and it&rsquo;s actually pretty straightforward to use.  The trick is to set the following metadata annotation on your service:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#f92672">metadata</span>:
-  <span style="color:#f92672">annotations</span>:
-    <span style="color:#f92672">service.beta.kubernetes.io/azure-dns-label-name</span>: <span style="color:#ae81ff">yourchosendnsname</span>
-</code></pre></div><p>By using this annotation, AKS will create a DNS record of the form <code>[yourchosendnsname].[location].cloudapp.azure.com</code>.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#f92672">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">annotations</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">service.beta.kubernetes.io/azure-dns-label-name</span>: <span style="color:#ae81ff">yourchosendnsname</span>
+</span></span></code></pre></div><p>By using this annotation, AKS will create a DNS record of the form <code>[yourchosendnsname].[location].cloudapp.azure.com</code>.</p>
 <h3 id="walk-through">Walk-Through</h3>
 <p>Let&rsquo;s walk through an example by deploying the sample &lsquo;Azure Voting App&rsquo; from the <a href="https://github.com/Azure-Samples/azure-voting-app-redis/blob/master/azure-vote-all-in-one-redis.yaml">Azure Documentation</a>:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">kubectl apply -f https://raw.githubusercontent.com/Azure-Samples/azure-voting-app-redis/master/azure-vote-all-in-one-redis.yaml
- 
-kubectl get services
-NAME               TYPE           CLUSTER-IP     EXTERNAL-IP    PORT<span style="color:#f92672">(</span>S<span style="color:#f92672">)</span>        AGE
-azure-vote-back    ClusterIP      10.0.73.110    &lt;none&gt;         6379/TCP       7s
-azure-vote-front   LoadBalancer   10.0.135.119   52.251.9.116   80:30118/TCP   7s
-kubernetes         ClusterIP      10.0.0.1       &lt;none&gt;         443/TCP        10m
-</code></pre></div><p>As expected, the azure-vote-front service is available via a public IP.  Now, let&rsquo;s modify the service definition to use the annotation; I&rsquo;m going to use the label <strong>larryvote</strong>, which should create the dns record larryvote.eastus2.cloudapp.com:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">kubectl apply -f - <span style="color:#e6db74">&lt;&lt;EOF
-</span><span style="color:#e6db74">apiVersion: v1
-</span><span style="color:#e6db74">kind: Service
-</span><span style="color:#e6db74">metadata:
-</span><span style="color:#e6db74">  name: azure-vote-front
-</span><span style="color:#e6db74">  annotations:
-</span><span style="color:#e6db74">    service.beta.kubernetes.io/azure-dns-label-name: larryvote
-</span><span style="color:#e6db74">spec:
-</span><span style="color:#e6db74">  type: LoadBalancer
-</span><span style="color:#e6db74">  ports:
-</span><span style="color:#e6db74">  - port: 80
-</span><span style="color:#e6db74">  selector:
-</span><span style="color:#e6db74">    app: azure-vote-front
-</span><span style="color:#e6db74">EOF</span>
-</code></pre></div><p>Let&rsquo;s check to see if it worked:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">&gt; nslookup larryvote.eastus2.cloudapp.azure.com
-
-Non-authoritative answer:
-Name:   larryvote.eastus2.cloudapp.azure.com
-Address: 52.251.9.116
-</code></pre></div><p>Yep, it worked!   You next thought may be, &ldquo;That&rsquo;s great, but I don&rsquo;t want to use that ugly domain name.  How can I use my own domain name?&rdquo;  The solution to this is also straightforward: use a CNAME.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>kubectl apply -f https://raw.githubusercontent.com/Azure-Samples/azure-voting-app-redis/master/azure-vote-all-in-one-redis.yaml
+</span></span><span style="display:flex;"><span> 
+</span></span><span style="display:flex;"><span>kubectl get services
+</span></span><span style="display:flex;"><span>NAME               TYPE           CLUSTER-IP     EXTERNAL-IP    PORT<span style="color:#f92672">(</span>S<span style="color:#f92672">)</span>        AGE
+</span></span><span style="display:flex;"><span>azure-vote-back    ClusterIP      10.0.73.110    &lt;none&gt;         6379/TCP       7s
+</span></span><span style="display:flex;"><span>azure-vote-front   LoadBalancer   10.0.135.119   52.251.9.116   80:30118/TCP   7s
+</span></span><span style="display:flex;"><span>kubernetes         ClusterIP      10.0.0.1       &lt;none&gt;         443/TCP        10m
+</span></span></code></pre></div><p>As expected, the azure-vote-front service is available via a public IP.  Now, let&rsquo;s modify the service definition to use the annotation; I&rsquo;m going to use the label <strong>larryvote</strong>, which should create the dns record larryvote.eastus2.cloudapp.com:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>kubectl apply -f - <span style="color:#e6db74">&lt;&lt;EOF
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">apiVersion: v1
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">kind: Service
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">metadata:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  name: azure-vote-front
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  annotations:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    service.beta.kubernetes.io/azure-dns-label-name: larryvote
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">spec:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  type: LoadBalancer
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  ports:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  - port: 80
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  selector:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    app: azure-vote-front
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">EOF</span>
+</span></span></code></pre></div><p>Let&rsquo;s check to see if it worked:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>&gt; nslookup larryvote.eastus2.cloudapp.azure.com
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>Non-authoritative answer:
+</span></span><span style="display:flex;"><span>Name:   larryvote.eastus2.cloudapp.azure.com
+</span></span><span style="display:flex;"><span>Address: 52.251.9.116
+</span></span></code></pre></div><p>Yep, it worked!   You next thought may be, &ldquo;That&rsquo;s great, but I don&rsquo;t want to use that ugly domain name.  How can I use my own domain name?&rdquo;  The solution to this is also straightforward: use a CNAME.</p>
 <h3 id="using-a-cname">Using a CNAME</h3>
 <p>In my case, I own the domain <strong>claman.org</strong>.  So I simply need to create a cname for larryvote.claman.org pointing to larryvote.eastus2.cloudapp.azure.com.  Let&rsquo;s check what that looks like:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-bash" data-lang="bash">&gt; nslookup larryvote.claman.org
-
-Non-authoritative answer:
-larryvote.claman.org    canonical name <span style="color:#f92672">=</span> larryvote.eastus2.cloudapp.azure.com.
-Name:   larryvote.eastus2.cloudapp.azure.com
-Address: 52.251.9.116
-</code></pre></div><p>Easy Peasy!  Of course you can access the web page via this name:
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>&gt; nslookup larryvote.claman.org
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>Non-authoritative answer:
+</span></span><span style="display:flex;"><span>larryvote.claman.org    canonical name <span style="color:#f92672">=</span> larryvote.eastus2.cloudapp.azure.com.
+</span></span><span style="display:flex;"><span>Name:   larryvote.eastus2.cloudapp.azure.com
+</span></span><span style="display:flex;"><span>Address: 52.251.9.116
+</span></span></code></pre></div><p>Easy Peasy!  Of course you can access the web page via this name:
 <img src="webpage.png" alt="web page"></p>
 <h3 id="dns-labels-for-nginx-ingress">DNS Labels for Nginx Ingress</h3>
 <p>Suppose you want to use an nginx ingress rather than a load balancer service?  You can use this same method, but it&rsquo;s slightly more complicated.  Again, it&rsquo;s documented, but not well, on <a href="https://docs.microsoft.com/en-us/azure/aks/ingress-static-ip">this page</a>.  Specifically, you need to set <code>controller.service.annotations.&quot;service\.beta\.kubernetes\.io/azure-dns-label-name&quot;=&quot;yourdnslabel&quot;</code>, where <em>yourdnslabel</em> is the dns name you want to use.</p>
@@ -178,11 +178,11 @@ Address: 52.251.9.116
 	<h4 class="widget__title">Recent Posts</h4>
 	<div class="widget__content">
 		<ul class="widget__list">
+			<li class="widget__item"><a class="widget__link" href="/post/2022-03-05-22-nplus1/">Kubernetes Cluster Autoscaler n&#43;1 nodes</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-11-19-21-keda2/">Kubernetes &amp; long running batch Jobs</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-11-14-21-keda/">KEDA, Windows, and Batch Jobs</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-08-19-21-bicep-uami/">Azure Bicep &amp; User Assigned Managed Identity</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-04-04-aks-dns-naming/">Easily create DNS names with Azure Kubernetes Service</a></li>
-			<li class="widget__item"><a class="widget__link" href="/post/2020-11-15-dependabot/">Create Issues Automatically with Dependabot</a></li>
 		</ul>
 	</div>
 </div>

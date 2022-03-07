@@ -59,118 +59,117 @@
 <h3 id="setting-pod-disruption-budget">Setting Pod Disruption Budget</h3>
 <p>The first method for preventing your pods from being terminated is to set a <a href="https://kubernetes.io/docs/tasks/run-application/configure-pdb/">Pod Disruption Budget</a>.  By configuring the PDB minAvailable to be the same as the number of jobs you desire, you can prevent the voluntary eviction of pods by the scaling engine.  This is a bit confusing, but let me provide an example:</p>
 <p>First, recall the scaledJob manifest from the previous blog post.   I&rsquo;ve added a label <code>app: winworker</code> to the template spec so that it can be used with the PDB.  Additionally, I&rsquo;ve set <strong>activeDeadlineSeconds</strong> to 2400 seconds (30 min for my job + 10 min extra &lsquo;buffer&rsquo; time).  If a job runs for longer than this amount of time, Keda will assume it has a problem and kill it off.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#f92672">apiVersion</span>: <span style="color:#ae81ff">keda.sh/v1alpha1</span>
-<span style="color:#f92672">kind</span>: <span style="color:#ae81ff">ScaledJob</span>
-<span style="color:#f92672">metadata</span>:
-  <span style="color:#f92672">name</span>: <span style="color:#ae81ff">azure-queue-scaledobject-jobs-win</span>
-  <span style="color:#f92672">namespace</span>: <span style="color:#ae81ff">default</span>
-<span style="color:#f92672">spec</span>:
-  <span style="color:#f92672">pollingInterval</span>: <span style="color:#ae81ff">30</span>
-  <span style="color:#f92672">maxReplicaCount</span>: <span style="color:#ae81ff">50</span>
-  <span style="color:#f92672">successfulJobsHistoryLimit</span>: <span style="color:#ae81ff">1</span>
-  <span style="color:#f92672">failedJobsHistoryLimit</span>: <span style="color:#ae81ff">1</span>
-  <span style="color:#f92672">jobTargetRef</span>:
-    <span style="color:#f92672">parallelism</span>: <span style="color:#ae81ff">1</span>
-    <span style="color:#f92672">completions</span>: <span style="color:#ae81ff">1</span>
-    <span style="color:#f92672">activeDeadlineSeconds</span>: <span style="color:#ae81ff">2400</span>  <span style="color:#75715e"># set to expected max runtime + some buffer</span>
-    <span style="color:#f92672">backoffLimit</span>: <span style="color:#ae81ff">6</span>
-    <span style="color:#f92672">template</span>:
-      <span style="color:#f92672">metadata</span>:
-        <span style="color:#f92672">labels</span>:
-          <span style="color:#f92672">app</span>: <span style="color:#ae81ff">winworker</span>
-      <span style="color:#f92672">spec</span>:
-        <span style="color:#f92672">nodeSelector</span>:
-          <span style="color:#f92672">kubernetes.io/os</span>: <span style="color:#ae81ff">windows</span>
-        <span style="color:#f92672">containers</span>:
-        - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">consumer-job</span>
-          <span style="color:#f92672">image</span>: <span style="color:#ae81ff">$ACR.azurecr.io/queue-consumer-windows</span>
-          <span style="color:#f92672">resources</span>:
-            <span style="color:#f92672">requests</span>:
-              <span style="color:#f92672">cpu</span>: <span style="color:#ae81ff">100m</span>
-              <span style="color:#f92672">memory</span>: <span style="color:#ae81ff">2000Mi</span> <span style="color:#75715e"># intentionally set high in order to trigger cluster autoscaler</span>
-            <span style="color:#f92672">limits</span>:
-              <span style="color:#f92672">cpu</span>: <span style="color:#ae81ff">100m</span>
-              <span style="color:#f92672">memory</span>: <span style="color:#ae81ff">2000Mi</span>
-          <span style="color:#f92672">env</span>:
-          - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
-            <span style="color:#f92672">valueFrom</span>:
-              <span style="color:#f92672">secretKeyRef</span>:
-                <span style="color:#f92672">name</span>: <span style="color:#ae81ff">secrets</span>
-                <span style="color:#f92672">key</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
-          - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">QUEUE_NAME</span>
-            <span style="color:#f92672">value</span>: <span style="color:#ae81ff">keda-queue</span>
-  <span style="color:#f92672">triggers</span>:
-  - <span style="color:#f92672">type</span>: <span style="color:#ae81ff">azure-queue</span>
-    <span style="color:#f92672">metadata</span>:
-      <span style="color:#f92672">queueName</span>: <span style="color:#ae81ff">keda-queue</span>
-      <span style="color:#f92672">queueLength</span>: <span style="color:#e6db74">&#39;1&#39;</span>
-      <span style="color:#f92672">connectionFromEnv</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
-</code></pre></div><p>Next, I&rsquo;ll specify the PDB.  Notice that I set <strong>minAvailable</strong> to 50, which is the same number as <strong>maxReplicaCount</strong> in the ScaledJob:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#f92672">apiVersion</span>: <span style="color:#ae81ff">policy/v1</span>
-<span style="color:#f92672">kind</span>: <span style="color:#ae81ff">PodDisruptionBudget</span>
-<span style="color:#f92672">metadata</span>:
-  <span style="color:#f92672">name</span>: <span style="color:#ae81ff">ww-pdb</span>
-<span style="color:#f92672">spec</span>:
-  <span style="color:#f92672">minAvailable</span>: <span style="color:#ae81ff">50</span>
-  <span style="color:#f92672">selector</span>:
-    <span style="color:#f92672">matchLabels</span>:
-      <span style="color:#f92672">app</span>: <span style="color:#ae81ff">winworker</span>
-
-</code></pre></div><p>And, Voila!  You will now be able to keep your jobs running for <strong>activeDeadlineSeconds</strong>!</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#f92672">apiVersion</span>: <span style="color:#ae81ff">keda.sh/v1alpha1</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">kind</span>: <span style="color:#ae81ff">ScaledJob</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">name</span>: <span style="color:#ae81ff">azure-queue-scaledobject-jobs-win</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">namespace</span>: <span style="color:#ae81ff">default</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">spec</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">pollingInterval</span>: <span style="color:#ae81ff">30</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">maxReplicaCount</span>: <span style="color:#ae81ff">50</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">successfulJobsHistoryLimit</span>: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">failedJobsHistoryLimit</span>: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">jobTargetRef</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">parallelism</span>: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">completions</span>: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">activeDeadlineSeconds</span>: <span style="color:#ae81ff">2400</span>  <span style="color:#75715e"># set to expected max runtime + some buffer</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">backoffLimit</span>: <span style="color:#ae81ff">6</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">template</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">metadata</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">labels</span>:
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">app</span>: <span style="color:#ae81ff">winworker</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">spec</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">nodeSelector</span>:
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">kubernetes.io/os</span>: <span style="color:#ae81ff">windows</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">containers</span>:
+</span></span><span style="display:flex;"><span>        - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">consumer-job</span>
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">image</span>: <span style="color:#ae81ff">$ACR.azurecr.io/queue-consumer-windows</span>
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">resources</span>:
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">requests</span>:
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">cpu</span>: <span style="color:#ae81ff">100m</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">memory</span>: <span style="color:#ae81ff">2000Mi</span> <span style="color:#75715e"># intentionally set high in order to trigger cluster autoscaler</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">limits</span>:
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">cpu</span>: <span style="color:#ae81ff">100m</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">memory</span>: <span style="color:#ae81ff">2000Mi</span>
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">env</span>:
+</span></span><span style="display:flex;"><span>          - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">valueFrom</span>:
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">secretKeyRef</span>:
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">name</span>: <span style="color:#ae81ff">secrets</span>
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">key</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
+</span></span><span style="display:flex;"><span>          - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">QUEUE_NAME</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">value</span>: <span style="color:#ae81ff">keda-queue</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">triggers</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#f92672">type</span>: <span style="color:#ae81ff">azure-queue</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">metadata</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">queueName</span>: <span style="color:#ae81ff">keda-queue</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">queueLength</span>: <span style="color:#e6db74">&#39;1&#39;</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">connectionFromEnv</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
+</span></span></code></pre></div><p>Next, I&rsquo;ll specify the PDB.  Notice that I set <strong>minAvailable</strong> to 50, which is the same number as <strong>maxReplicaCount</strong> in the ScaledJob:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#f92672">apiVersion</span>: <span style="color:#ae81ff">policy/v1</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">kind</span>: <span style="color:#ae81ff">PodDisruptionBudget</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">name</span>: <span style="color:#ae81ff">ww-pdb</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">spec</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">minAvailable</span>: <span style="color:#ae81ff">50</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">selector</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">matchLabels</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">app</span>: <span style="color:#ae81ff">winworker</span>
+</span></span></code></pre></div><p>And, Voila!  You will now be able to keep your jobs running for <strong>activeDeadlineSeconds</strong>!</p>
 <h3 id="preventing-the-ca-from-evicting-pods">Preventing the CA from evicting pods</h3>
 <p>The pod disruption budget is a great general purpose solution that will work with any workload: jobs, deployments,etc.  However, if all you want to prevent is pods being evicted when a node is set to drain, (eg, prevent the cluster autoscaler from scaling down a node with a long running job) there is a simpler method you can use.</p>
 <p>To achieve this, you can simply set an annotation on your pod as:
 <code>&quot;cluster-autoscaler.kubernetes.io/safe-to-evict&quot;: &quot;false&quot;</code></p>
 <p>Specifically:</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#f92672">apiVersion</span>: <span style="color:#ae81ff">keda.sh/v1alpha1</span>
-<span style="color:#f92672">kind</span>: <span style="color:#ae81ff">ScaledJob</span>
-<span style="color:#f92672">metadata</span>:
-  <span style="color:#f92672">name</span>: <span style="color:#ae81ff">azure-queue-scaledobject-jobs-win</span>
-  <span style="color:#f92672">namespace</span>: <span style="color:#ae81ff">default</span>
-<span style="color:#f92672">spec</span>:
-  <span style="color:#f92672">pollingInterval</span>: <span style="color:#ae81ff">30</span>
-  <span style="color:#f92672">maxReplicaCount</span>: <span style="color:#ae81ff">50</span>
-  <span style="color:#f92672">successfulJobsHistoryLimit</span>: <span style="color:#ae81ff">1</span>
-  <span style="color:#f92672">failedJobsHistoryLimit</span>: <span style="color:#ae81ff">1</span>
-  <span style="color:#f92672">jobTargetRef</span>:
-    <span style="color:#f92672">parallelism</span>: <span style="color:#ae81ff">1</span>
-    <span style="color:#f92672">completions</span>: <span style="color:#ae81ff">1</span>
-    <span style="color:#f92672">activeDeadlineSeconds</span>: <span style="color:#ae81ff">2400</span>  <span style="color:#75715e"># set to expected max runtime + some buffer</span>
-    <span style="color:#f92672">backoffLimit</span>: <span style="color:#ae81ff">6</span>
-    <span style="color:#f92672">template</span>:
-      <span style="color:#f92672">metadata</span>:
-        <span style="color:#f92672">annotations</span>:
-          <span style="color:#f92672">&#34;cluster-autoscaler.kubernetes.io/safe-to-evict&#34;: </span><span style="color:#e6db74">&#34;false&#34;</span>
-        <span style="color:#f92672">labels</span>:
-          <span style="color:#f92672">app</span>: <span style="color:#ae81ff">winworker</span>
-      <span style="color:#f92672">spec</span>:
-        <span style="color:#f92672">nodeSelector</span>:
-          <span style="color:#f92672">kubernetes.io/os</span>: <span style="color:#ae81ff">windows</span>
-        <span style="color:#f92672">containers</span>:
-        - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">consumer-job</span>
-          <span style="color:#f92672">image</span>: <span style="color:#ae81ff">$ACR.azurecr.io/queue-consumer-windows</span>
-          <span style="color:#f92672">resources</span>:
-            <span style="color:#f92672">requests</span>:
-              <span style="color:#f92672">cpu</span>: <span style="color:#ae81ff">100m</span>
-              <span style="color:#f92672">memory</span>: <span style="color:#ae81ff">2000Mi</span> <span style="color:#75715e"># intentionally set high in order to trigger cluster autoscaler</span>
-            <span style="color:#f92672">limits</span>:
-              <span style="color:#f92672">cpu</span>: <span style="color:#ae81ff">100m</span>
-              <span style="color:#f92672">memory</span>: <span style="color:#ae81ff">2000Mi</span>
-          <span style="color:#f92672">env</span>:
-          - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
-            <span style="color:#f92672">valueFrom</span>:
-              <span style="color:#f92672">secretKeyRef</span>:
-                <span style="color:#f92672">name</span>: <span style="color:#ae81ff">secrets</span>
-                <span style="color:#f92672">key</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
-          - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">QUEUE_NAME</span>
-            <span style="color:#f92672">value</span>: <span style="color:#ae81ff">keda-queue</span>
-  <span style="color:#f92672">triggers</span>:
-  - <span style="color:#f92672">type</span>: <span style="color:#ae81ff">azure-queue</span>
-    <span style="color:#f92672">metadata</span>:
-      <span style="color:#f92672">queueName</span>: <span style="color:#ae81ff">keda-queue</span>
-      <span style="color:#f92672">queueLength</span>: <span style="color:#e6db74">&#39;1&#39;</span>
-      <span style="color:#f92672">connectionFromEnv</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
-</code></pre></div><p>And that&rsquo;s it, no PDB or other configuration needed.  (Do be aware of <code>activeDeadlineSeconds</code>, as that will have the same effect in any case)</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#f92672">apiVersion</span>: <span style="color:#ae81ff">keda.sh/v1alpha1</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">kind</span>: <span style="color:#ae81ff">ScaledJob</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">metadata</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">name</span>: <span style="color:#ae81ff">azure-queue-scaledobject-jobs-win</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">namespace</span>: <span style="color:#ae81ff">default</span>
+</span></span><span style="display:flex;"><span><span style="color:#f92672">spec</span>:
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">pollingInterval</span>: <span style="color:#ae81ff">30</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">maxReplicaCount</span>: <span style="color:#ae81ff">50</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">successfulJobsHistoryLimit</span>: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">failedJobsHistoryLimit</span>: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">jobTargetRef</span>:
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">parallelism</span>: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">completions</span>: <span style="color:#ae81ff">1</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">activeDeadlineSeconds</span>: <span style="color:#ae81ff">2400</span>  <span style="color:#75715e"># set to expected max runtime + some buffer</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">backoffLimit</span>: <span style="color:#ae81ff">6</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">template</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">metadata</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">annotations</span>:
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">&#34;cluster-autoscaler.kubernetes.io/safe-to-evict&#34;: </span><span style="color:#e6db74">&#34;false&#34;</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">labels</span>:
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">app</span>: <span style="color:#ae81ff">winworker</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">spec</span>:
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">nodeSelector</span>:
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">kubernetes.io/os</span>: <span style="color:#ae81ff">windows</span>
+</span></span><span style="display:flex;"><span>        <span style="color:#f92672">containers</span>:
+</span></span><span style="display:flex;"><span>        - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">consumer-job</span>
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">image</span>: <span style="color:#ae81ff">$ACR.azurecr.io/queue-consumer-windows</span>
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">resources</span>:
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">requests</span>:
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">cpu</span>: <span style="color:#ae81ff">100m</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">memory</span>: <span style="color:#ae81ff">2000Mi</span> <span style="color:#75715e"># intentionally set high in order to trigger cluster autoscaler</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">limits</span>:
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">cpu</span>: <span style="color:#ae81ff">100m</span>
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">memory</span>: <span style="color:#ae81ff">2000Mi</span>
+</span></span><span style="display:flex;"><span>          <span style="color:#f92672">env</span>:
+</span></span><span style="display:flex;"><span>          - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">valueFrom</span>:
+</span></span><span style="display:flex;"><span>              <span style="color:#f92672">secretKeyRef</span>:
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">name</span>: <span style="color:#ae81ff">secrets</span>
+</span></span><span style="display:flex;"><span>                <span style="color:#f92672">key</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
+</span></span><span style="display:flex;"><span>          - <span style="color:#f92672">name</span>: <span style="color:#ae81ff">QUEUE_NAME</span>
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">value</span>: <span style="color:#ae81ff">keda-queue</span>
+</span></span><span style="display:flex;"><span>  <span style="color:#f92672">triggers</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#f92672">type</span>: <span style="color:#ae81ff">azure-queue</span>
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">metadata</span>:
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">queueName</span>: <span style="color:#ae81ff">keda-queue</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">queueLength</span>: <span style="color:#e6db74">&#39;1&#39;</span>
+</span></span><span style="display:flex;"><span>      <span style="color:#f92672">connectionFromEnv</span>: <span style="color:#ae81ff">AzureWebJobsStorage</span>
+</span></span></code></pre></div><p>And that&rsquo;s it, no PDB or other configuration needed.  (Do be aware of <code>activeDeadlineSeconds</code>, as that will have the same effect in any case)</p>
 
 		</div>
 		<footer class="post__footer">
@@ -215,6 +214,12 @@
 			<p class="pager__title">KEDA, Windows, and Batch Jobs</p>
 		</a>
 	</div>
+	<div class="pager__item pager__item--next">
+		<a class="pager__link" href="/post/2022-03-05-22-nplus1/" rel="next">
+			<span class="pager__subtitle">Next&thinsp;»</span>
+			<p class="pager__title">Kubernetes Cluster Autoscaler n&#43;1 nodes</p>
+		</a>
+	</div>
 </nav>
 
 
@@ -244,11 +249,11 @@
 	<h4 class="widget__title">Recent Posts</h4>
 	<div class="widget__content">
 		<ul class="widget__list">
+			<li class="widget__item"><a class="widget__link" href="/post/2022-03-05-22-nplus1/">Kubernetes Cluster Autoscaler n&#43;1 nodes</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-11-19-21-keda2/">Kubernetes &amp; long running batch Jobs</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-11-14-21-keda/">KEDA, Windows, and Batch Jobs</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-08-19-21-bicep-uami/">Azure Bicep &amp; User Assigned Managed Identity</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-04-04-aks-dns-naming/">Easily create DNS names with Azure Kubernetes Service</a></li>
-			<li class="widget__item"><a class="widget__link" href="/post/2020-11-15-dependabot/">Create Issues Automatically with Dependabot</a></li>
 		</ul>
 	</div>
 </div>

@@ -65,14 +65,14 @@ RUN pip install redis
 RUN pip install flask
 ADD /azure-vote /app
 
-CMD [ &quot;python&quot;, &quot;/app/main.py&quot; ]
+CMD [ &#34;python&#34;, &#34;/app/main.py&#34; ]
 </code></pre><h3 id="step-1--create-a-dummy-base-image-and-task-in-acr">Step 1:  Create a dummy base image and task in ACR</h3>
 <p>As I mentioned above, I&rsquo;m going to build a dummy base image using ACR, and then use a webhook when this image updates to trigger my Azure DevOps pipeline.</p>
 <p>First, I&rsquo;ll need to follow the instructions <a href="https://docs.microsoft.com/en-us/azure/container-registry/container-registry-tutorial-base-image-update">here</a> to create a dummy base image and a task to update it when its reference base updates on Dockerhub.</p>
 <p>To start, build the base image in ACR:</p>
 <pre tabindex="0"><code>ACR_NAME=larrymsvoting
-REPO=&quot;https://larrydevopstest@dev.azure.com/larrydevopstest/AzureVotingApp/_git/AzureVotingApp&quot;
-DOCKER_FILE=&quot;azure-vote/Dockerfile-pythonbase&quot;
+REPO=&#34;https://larrydevopstest@dev.azure.com/larrydevopstest/AzureVotingApp/_git/AzureVotingApp&#34;
+DOCKER_FILE=&#34;azure-vote/Dockerfile-pythonbase&#34;
 
 az acr build --registry $ACR_NAME -t baseimages/python-3.6-slim-base \
     --file $DOCKER_FILE $REPO
@@ -182,11 +182,11 @@ az acr webhook create -n pythonbasehook -r $ACR_NAME \
 	<h4 class="widget__title">Recent Posts</h4>
 	<div class="widget__content">
 		<ul class="widget__list">
+			<li class="widget__item"><a class="widget__link" href="/post/2022-03-05-22-nplus1/">Kubernetes Cluster Autoscaler n&#43;1 nodes</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-11-19-21-keda2/">Kubernetes &amp; long running batch Jobs</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-11-14-21-keda/">KEDA, Windows, and Batch Jobs</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-08-19-21-bicep-uami/">Azure Bicep &amp; User Assigned Managed Identity</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-04-04-aks-dns-naming/">Easily create DNS names with Azure Kubernetes Service</a></li>
-			<li class="widget__item"><a class="widget__link" href="/post/2020-11-15-dependabot/">Create Issues Automatically with Dependabot</a></li>
 		</ul>
 	</div>
 </div>

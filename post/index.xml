@@ -6,7 +6,16 @@
     <description>Recent content in Posts on Larry Claman&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Wed, 17 Nov 2021 00:00:00 +0000</lastBuildDate><atom:link href="https://larryclaman.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Mon, 07 Mar 2022 00:00:00 +0000</lastBuildDate><atom:link href="https://larryclaman.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Kubernetes Cluster Autoscaler n&#43;1 nodes</title>
+      <link>https://larryclaman.github.io/post/2022-03-05-22-nplus1/</link>
+      <pubDate>Mon, 07 Mar 2022 00:00:00 +0000</pubDate>
+      
+      <guid>https://larryclaman.github.io/post/2022-03-05-22-nplus1/</guid>
+      <description>Configure the K8S cluster autoscaler to always have an extra surge node</description>
+    </item>
+    
     <item>
       <title>Kubernetes &amp; long running batch Jobs</title>
       <link>https://larryclaman.github.io/post/2021-11-19-21-keda2/</link>

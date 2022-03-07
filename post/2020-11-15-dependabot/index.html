@@ -71,19 +71,19 @@ jobs:
         GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
       steps:
         - uses: actions/checkout@v2
-          if: github.event.pull_request.user.login  == 'dependabot[bot]'
+          if: github.event.pull_request.user.login  == &#39;dependabot[bot]&#39;
           
         - name: Open issue if Dependabot PR
-          if: github.event.pull_request.user.login  == 'dependabot[bot]'
+          if: github.event.pull_request.user.login  == &#39;dependabot[bot]&#39;
           env:
             pr_title: ${{github.event.pull_request.title}}
             pr_number: ${{github.event.pull_request.number}}
             pr_url: ${{github.event.pull_request.url}}
           run: |
-            title=&quot;Dependabot PR $pr_title opened&quot;
-            body=&quot;Dependabot has opened PR #$pr_number
-            Link: $pr_url&quot;
-            gh issue create --title &quot;$title&quot; --body &quot;$body&quot;    
+            title=&#34;Dependabot PR $pr_title opened&#34;
+            body=&#34;Dependabot has opened PR #$pr_number
+            Link: $pr_url&#34;
+            gh issue create --title &#34;$title&#34; --body &#34;$body&#34;    
 </code></pre>
 		</div>
 		<footer class="post__footer">
@@ -154,11 +154,11 @@ jobs:
 	<h4 class="widget__title">Recent Posts</h4>
 	<div class="widget__content">
 		<ul class="widget__list">
+			<li class="widget__item"><a class="widget__link" href="/post/2022-03-05-22-nplus1/">Kubernetes Cluster Autoscaler n&#43;1 nodes</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-11-19-21-keda2/">Kubernetes &amp; long running batch Jobs</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-11-14-21-keda/">KEDA, Windows, and Batch Jobs</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-08-19-21-bicep-uami/">Azure Bicep &amp; User Assigned Managed Identity</a></li>
 			<li class="widget__item"><a class="widget__link" href="/post/2021-04-04-aks-dns-naming/">Easily create DNS names with Azure Kubernetes Service</a></li>
-			<li class="widget__item"><a class="widget__link" href="/post/2020-11-15-dependabot/">Create Issues Automatically with Dependabot</a></li>
 		</ul>
 	</div>
 </div>
