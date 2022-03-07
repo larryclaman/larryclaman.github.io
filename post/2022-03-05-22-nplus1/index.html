@@ -8,7 +8,7 @@
 	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
 	<meta name="description" content="">
 		<meta property="og:title" content="Kubernetes Cluster Autoscaler n&#43;1 nodes" />
-<meta property="og:description" content="Configure the K8S cluster autoscaler to always have an extra surge node" />
+<meta property="og:description" content="Configure the Kubernetes cluster autoscaler to always have an extra surge node" />
 <meta property="og:type" content="article" />
 <meta property="og:url" content="https://larryclaman.github.io/post/2022-03-05-22-nplus1/" /><meta property="article:section" content="post" />
 <meta property="article:published_time" content="2022-03-07T00:00:00+00:00" />
@@ -54,8 +54,8 @@
 	<svg class="meta__icon icon icon-time" width="16" height="14" viewBox="0 0 30 28"><path d="M15 0C7 0 1 6 1 14s6 14 14 14 14-6 14-14S23 0 15 0zm0 25C9 25 4 20 4 14S9 3 15 3s11 5 11 11-5 11-11 11zm1-18h-2v8.4l6.8 4.4L22 18l-6-3.8V7z"/></svg><time class="meta__text" datetime="2022-03-07T00:00:00Z">March 07, 2022</time></div></div>
 		</header>
 		<div class="content post__content clearfix">
-			<p>This is a followup to the first two parts of this series, <a href="/post/2021-11-14-21-keda/">KEDA &amp; Windows</a> and <a href="2021-11-19-21-keda2.md">Kubernetes &amp; Long Running Batch Jobs</a>, where I talk about various ways to autoscale jobs as well as how to speed up node scale-out by using deallocate mode.</p>
-<p>This post talks about another technique for improving node scale out time, which is to use a &ldquo;n + 1&rdquo; approach; eg, have an extra node ready and waiting for work.
+			<p>This is a followup to the first two parts of this series, <a href="/post/2021-11-14-21-keda/">KEDA &amp; Windows</a> and <a href="/post/2021-11-19-21-keda2.md">Kubernetes &amp; Long Running Batch Jobs</a>, where I talk about various ways to autoscale jobs as well as how to speed up node scale-out by using deallocate mode.</p>
+<p>This post talks about another technique for improving node scale out time, which is to use a &ldquo;n + 1&rdquo; approach; eg, have an extra node ready and waiting for work. (sometimes called a <em>surge node</em>.)
 By always having an extra node around, you can quickly scale pods onto it without waiting for it to boot up and initialize.<br>
 Of course, there is a trade-off for this, namely cost:  you&rsquo;re going to be paying for an extra node to sit there and &ldquo;wait&rdquo; for work.  However, if scale-out time is important to you, this could be a good tool in your toolkit.</p>
 <p>Let&rsquo;s walk through how to achieve this:  (<em>Note: I&rsquo;m basing much of this post on the excellent guidance available at <a href="https://pixelrobots.co.uk/2021/03/aks-how-to-over-provision-node-pools/">https://pixelrobots.co.uk/2021/03/aks-how-to-over-provision-node-pools/</a></em>)</p>
