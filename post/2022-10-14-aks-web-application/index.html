@@ -107,37 +107,37 @@
 </span></span></code></pre></div><h2 id="discovery-2--it-can-use-azure-dns-labels">Discovery #2:  It can use Azure DNS labels</h2>
 <p>The previous example used an ip address, but what if you want to use a hostname?  And what if you don&rsquo;t have a custom domain name to use?  Back a while ago, I wrote a <a href="https://larry.claman.net/post/2021-04-04-aks-dns-naming/">blog post</a> on how to use semi custom DNS label with AKS load balancers.  I was curious to see if I could use this technique with the Web Application addon, and was excited to find the answer is yes!</p>
 <p>The secret is to apply an annotation to the service.  (Yes, this is a little hacky.)  Earlier, we saw that the addon creates a service called <code>nginx</code> in the <code>app-routing-system</code> namespace.  We can set an annotation on this service to create a dns label:</p>
-<pre tabindex="0"><code>apphostname=&#34;lncblogdemo&#34;  # fqdn will be &lt;hostname&gt;.&lt;region&gt;.cloudapp.azure.com per https://learn.microsoft.com/en-us/azure/aks/static-ip#apply-a-dns-label-to-the-service
-apphostfullname=${apphostname}.${LOCATION}.cloudapp.azure.com
-kubectl annotate service nginx  service.beta.kubernetes.io/azure-dns-label-name=${apphostname} -n app-routing-system
-</code></pre><p>And we&rsquo;ll modify the ingress to require the <code>host</code> header:</p>
-<pre tabindex="0"><code>cat &lt;&lt;EOF |kubectl apply -f -
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ingress-sample
-spec:
-  ingressClassName: webapprouting.kubernetes.azure.com
-  rules:
-  - host: ${apphostfullname}
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: server1
-            port:
-              number: 80
-      - path: /server2
-        pathType: Prefix
-        backend:
-          service:
-            name: server2
-            port:
-              number: 80
-EOF
-</code></pre><p>Give it a few minutes to propagate, then run:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>apphostname<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;lncblogdemo&#34;</span>  <span style="color:#75715e"># fqdn will be &lt;hostname&gt;.&lt;region&gt;.cloudapp.azure.com per https://learn.microsoft.com/en-us/azure/aks/static-ip#apply-a-dns-label-to-the-service</span>
+</span></span><span style="display:flex;"><span>apphostfullname<span style="color:#f92672">=</span><span style="color:#e6db74">${</span>apphostname<span style="color:#e6db74">}</span>.<span style="color:#e6db74">${</span>LOCATION<span style="color:#e6db74">}</span>.cloudapp.azure.com
+</span></span><span style="display:flex;"><span>kubectl annotate service nginx  service.beta.kubernetes.io/azure-dns-label-name<span style="color:#f92672">=</span><span style="color:#e6db74">${</span>apphostname<span style="color:#e6db74">}</span> -n app-routing-system
+</span></span></code></pre></div><p>And we&rsquo;ll modify the ingress to require the <code>host</code> header:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>cat <span style="color:#e6db74">&lt;&lt;EOF |kubectl apply -f -
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">apiVersion: networking.k8s.io/v1
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">kind: Ingress
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">metadata:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  name: ingress-sample
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">spec:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  ingressClassName: webapprouting.kubernetes.azure.com
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  rules:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  - host: ${apphostfullname}
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    http:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">      paths:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">      - path: /
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        pathType: Prefix
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        backend:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">          service:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            name: server1
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            port:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">              number: 80
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">      - path: /server2
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        pathType: Prefix
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        backend:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">          service:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            name: server2
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            port:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">              number: 80
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">EOF</span>
+</span></span></code></pre></div><p>Give it a few minutes to propagate, then run:</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ curl http://lncblogdemo.westus3.cloudapp.azure.com
 </span></span><span style="display:flex;"><span>server1
 </span></span><span style="display:flex;"><span>curl http://lncblogdemo.westus3.cloudapp.azure.com/server2
