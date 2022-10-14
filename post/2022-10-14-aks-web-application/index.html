@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>Exploring AKS Web Application Routing Addon - Larry Claman&#39;s Blog</title>
+	<script>(function(d,e){d[e]=d[e].replace("no-js","js");})(document.documentElement,"className");</script>
+	<meta name="description" content="">
+		<meta property="og:title" content="Exploring AKS Web Application Routing Addon" />
+<meta property="og:description" content="A simplified intro to the new AKS Web Application Routing feature" />
+<meta property="og:type" content="article" />
+<meta property="og:url" content="https://larryclaman.github.io/post/2022-10-14-aks-web-application/" /><meta property="article:section" content="post" />
+<meta property="article:published_time" content="2022-10-14T00:00:00+00:00" />
+<meta property="article:modified_time" content="2022-10-14T00:00:00+00:00" />
+
+
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link rel="dns-prefetch" href="//fonts.googleapis.com">
+	<link rel="dns-prefetch" href="//fonts.gstatic.com">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Open+Sans:400,400i,700">
+
+	<link rel="stylesheet" href="/css/style.css">
+	
+
+	<link rel="shortcut icon" href="/favicon.ico">
+		
+</head>
+<body class="body">
+	<div class="container container--outer">
+		<header class="header">
+	<div class="container header__container">
+		
+	<div class="logo">
+		<a class="logo__link" href="/" title="Larry Claman&#39;s Blog" rel="home">
+			<div class="logo__item logo__text">
+					<div class="logo__title">Larry Claman&#39;s Blog</div>
+					<div class="logo__tagline">Azure, Cloud, and other tech</div>
+				</div>
+		</a>
+	</div>
+		<div class="divider"></div>
+	</div>
+</header>
+		<div class="wrapper flex">
+			<div class="primary">
+			
+<main class="main" role="main">
+	<article class="post">
+		<header class="post__header">
+			<h1 class="post__title">Exploring AKS Web Application Routing Addon</h1>
+			<div class="post__meta meta">
+<div class="meta__item-datetime meta__item">
+	<svg class="meta__icon icon icon-time" width="16" height="14" viewBox="0 0 30 28"><path d="M15 0C7 0 1 6 1 14s6 14 14 14 14-6 14-14S23 0 15 0zm0 25C9 25 4 20 4 14S9 3 15 3s11 5 11 11-5 11-11 11zm1-18h-2v8.4l6.8 4.4L22 18l-6-3.8V7z"/></svg><time class="meta__text" datetime="2022-10-14T00:00:00Z">October 14, 2022</time></div></div>
+		</header>
+		<div class="content post__content clearfix">
+			<p>Microsoft recently released the <a href="https://learn.microsoft.com/en-us/azure/aks/web-app-routing">Web Application Routing addon</a> for AKS in preview. Quote: <em>The Web Application Routing add-on configures an Ingress controller in your Azure Kubernetes Service (AKS) cluster with SSL termination through certificates stored in Azure Key Vault. Optionally, it also integrates with Open Service Mesh (OSM) for end-to-end encryption of inter cluster communication using mutual TLS (mTLS). As applications are deployed, the add-on creates publicly accessible DNS names for endpoints.</em></p>
+<p>There&rsquo;s a lot there; unfortunately the documentation at this point in time (October 2022) only shows a few examples and does not yet do a good job of exploring more general use cases or configuration options.  So I decided to do some exploration on my own and see what I could find.</p>
+<h2 id="discovery-1--it-can-be-a-simple-nginx-ingress-controller">Discovery #1:  It can be a simple Nginx ingress controller</h2>
+<p>The documentation does not really make this clear, but you can use the addon even if all you want is a (simple) <a href="https://kubernetes.github.io/ingress-nginx/">ingress-nginx</a> ingress controller.  Why would you want this versus, for example, simply installing the ingress-nginx controller <a href="https://learn.microsoft.com/en-us/azure/aks/ingress-basic?tabs=azure-cli">via helm</a>?  One reason is the addon (once it moves from preview to GA) will be fully supported and managed by Microsoft.  I&rsquo;ve worked with some customers for whom this is a concern.  Additionally, because it is an addon, it can be provisioned via infrastructure as code templates (eg, Bicep, ARM, Terraform) all in one shot; no need to separately deploy the ingress controller via helm.</p>
+<p>Let&rsquo;s walk through an example:  I&rsquo;m going to start with an AKS cluster I&rsquo;ve previously provisioned.  First step is to install the addon:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>RG<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;demo&#34;</span>
+</span></span><span style="display:flex;"><span>LOCATION<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;westus3&#34;</span>
+</span></span><span style="display:flex;"><span>AKS<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;demoaks&#34;</span>
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>az aks enable-addons -g $RG -n $AKS --addons web_application_routing
+</span></span></code></pre></div><p>Next, let&rsquo;s run a pair of very simple webservers that echo their hostname: <em>(Yes, I recognize that this is imperative which is not the &ldquo;pure&rdquo; declarative K8S way.  But it&rsquo;s quick and simple for this exercise)</em></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>kubectl run server1 --image<span style="color:#f92672">=</span>k8s.gcr.io/e2e-test-images/agnhost:2.40 --labels<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;app=server1&#34;</span> --port<span style="color:#f92672">=</span><span style="color:#ae81ff">80</span> --command -- /agnhost serve-hostname --http --port <span style="color:#e6db74">&#34;80&#34;</span>
+</span></span><span style="display:flex;"><span>kubectl expose pod server1 --port <span style="color:#ae81ff">80</span>
+</span></span><span style="display:flex;"><span>kubectl run server2 --image<span style="color:#f92672">=</span>k8s.gcr.io/e2e-test-images/agnhost:2.40 --labels<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;app=server2&#34;</span> --port<span style="color:#f92672">=</span><span style="color:#ae81ff">80</span> --command -- /agnhost serve-hostname --http --port <span style="color:#e6db74">&#34;80&#34;</span>
+</span></span><span style="display:flex;"><span>kubectl expose pod server2 --port <span style="color:#ae81ff">80</span>
+</span></span></code></pre></div><p>Now let&rsquo;s deploy a simple ingress:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>cat <span style="color:#e6db74">&lt;&lt;EOF |kubectl apply -f -
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">apiVersion: networking.k8s.io/v1
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">kind: Ingress
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">metadata:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  name: ingress-sample
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">spec:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  ingressClassName: webapprouting.kubernetes.azure.com
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  rules:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  - http:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">      paths:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">      - path: /
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        pathType: Prefix
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        backend:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">          service:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            name: server1
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            port:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">              number: 80
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">      - path: /server2
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        pathType: Prefix
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        backend:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">          service:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            name: server2
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            port:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">              number: 80
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">EOF</span>
+</span></span></code></pre></div><p>You&rsquo;ll notice there&rsquo;s no &lsquo;hostname&rsquo; defined in the ingress; that&rsquo;s intentional; we&rsquo;ll deal with that in the next section.  For now, we will need to work with our ingress using an IP address, which I find by looking at the kubernetes service associated with the ingress controller:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ kubectl get svc -n app-routing-system
+</span></span><span style="display:flex;"><span>NAME    TYPE           CLUSTER-IP    EXTERNAL-IP      PORT<span style="color:#f92672">(</span>S<span style="color:#f92672">)</span>                      AGE
+</span></span><span style="display:flex;"><span>nginx   LoadBalancer   10.0.248.37   20.118.145.244   80:32224/TCP,443:31564/TCP   43m
+</span></span></code></pre></div><p>I can now test the ingress:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ curl http://20.118.145.244
+</span></span><span style="display:flex;"><span>server1
+</span></span><span style="display:flex;"><span>$ curl http://20.118.145.244/server2
+</span></span><span style="display:flex;"><span>server2
+</span></span></code></pre></div><h2 id="discovery-2--it-can-use-azure-dns-labels">Discovery #2:  It can use Azure DNS labels</h2>
+<p>The previous example used an ip address, but what if you want to use a hostname?  And what if you don&rsquo;t have a custom domain name to use?  Back a while ago, I wrote a <a href="https://larry.claman.net/post/2021-04-04-aks-dns-naming/">blog post</a> on how to use semi custom DNS label with AKS load balancers.  I was curious to see if I could use this technique with the Web Application addon, and was excited to find the answer is yes!</p>
+<p>The secret is to apply an annotation to the service.  (Yes, this is a little hacky.)  Earlier, we saw that the addon creates a service called <code>nginx</code> in the <code>app-routing-system</code> namespace.  We can set an annotation on this service to create a dns label:</p>
+<pre tabindex="0"><code>apphostname=&#34;lncblogdemo&#34;  # fqdn will be &lt;hostname&gt;.&lt;region&gt;.cloudapp.azure.com per https://learn.microsoft.com/en-us/azure/aks/static-ip#apply-a-dns-label-to-the-service
+apphostfullname=${apphostname}.${LOCATION}.cloudapp.azure.com
+kubectl annotate service nginx  service.beta.kubernetes.io/azure-dns-label-name=${apphostname} -n app-routing-system
+</code></pre><p>And we&rsquo;ll modify the ingress to require the <code>host</code> header:</p>
+<pre tabindex="0"><code>cat &lt;&lt;EOF |kubectl apply -f -
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-sample
+spec:
+  ingressClassName: webapprouting.kubernetes.azure.com
+  rules:
+  - host: ${apphostfullname}
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: server1
+            port:
+              number: 80
+      - path: /server2
+        pathType: Prefix
+        backend:
+          service:
+            name: server2
+            port:
+              number: 80
+EOF
+</code></pre><p>Give it a few minutes to propagate, then run:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ curl http://lncblogdemo.westus3.cloudapp.azure.com
+</span></span><span style="display:flex;"><span>server1
+</span></span><span style="display:flex;"><span>curl http://lncblogdemo.westus3.cloudapp.azure.com/server2
+</span></span><span style="display:flex;"><span>server2
+</span></span></code></pre></div><h2 id="discovery-3--it-can-generate-a-dummy-tls-certificate">Discovery #3:  It can generate a dummy TLS certificate</h2>
+<p>What if you want to test TLS but don&rsquo;t have a certificate? (or don&rsquo;t want to create a self-signed certificate?) In my explorations, I found that the addon will generate its own self-signed, &ldquo;fake&rdquo; certificate.</p>
+<p>Let&rsquo;s modify the ingress to use TLS:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>cat <span style="color:#e6db74">&lt;&lt;EOF |kubectl apply -f -
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">apiVersion: networking.k8s.io/v1
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">kind: Ingress
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">metadata:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  name: ingress-sample
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">spec:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  ingressClassName: webapprouting.kubernetes.azure.com
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  tls:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  - hosts:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    - ${apphostfullname}
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  rules:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  - host: ${apphostfullname}
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    http:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">      paths:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">      - path: /
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        pathType: Prefix
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        backend:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">          service:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            name: server1
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            port:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">              number: 80
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">      - path: /server2
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        pathType: Prefix
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        backend:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">          service:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            name: server2
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            port:
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">              number: 80
+</span></span></span><span style="display:flex;"><span><span style="color:#e6db74">EOF</span>
+</span></span></code></pre></div><p>Let&rsquo;s use curl again.  Notice that the first try fails due to an invalid tls certificate.  I then use the <code>-k</code> option to ignore errors:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ curl https://lncblogdemo.westus3.cloudapp.azure.com
+</span></span><span style="display:flex;"><span>curl: <span style="color:#f92672">(</span>60<span style="color:#f92672">)</span> SSL certificate problem: unable to get local issuer certificate
+</span></span><span style="display:flex;"><span>More details here: https://curl.haxx.se/docs/sslcerts.html
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span>curl failed to verify the legitimacy of the server and therefore could not
+</span></span><span style="display:flex;"><span>establish a secure connection to it. To learn more about this situation and
+</span></span><span style="display:flex;"><span>how to fix it, please visit the web page mentioned above.
+</span></span><span style="display:flex;"><span>$ curl -k https://lncblogdemo.westus3.cloudapp.azure.com
+</span></span><span style="display:flex;"><span>server1
+</span></span></code></pre></div><p>Next let&rsquo;s look at the certificate:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-bash" data-lang="bash"><span style="display:flex;"><span>$ curl -k -v https://lncblogdemo.westus3.cloudapp.azure.com
+</span></span><span style="display:flex;"><span>*   Trying 20.118.145.244:443...
+</span></span><span style="display:flex;"><span>* TCP_NODELAY set
+</span></span><span style="display:flex;"><span>* Connected to lncblogdemo.westus3.cloudapp.azure.com <span style="color:#f92672">(</span>20.118.145.244<span style="color:#f92672">)</span> port <span style="color:#ae81ff">443</span> <span style="color:#f92672">(</span><span style="color:#75715e">#0)</span>
+</span></span><span style="display:flex;"><span>* ALPN, offering h2
+</span></span><span style="display:flex;"><span>* ALPN, offering http/1.1
+</span></span><span style="display:flex;"><span>* successfully set certificate verify locations:
+</span></span><span style="display:flex;"><span>*   CAfile: /etc/ssl/certs/ca-certificates.crt
+</span></span><span style="display:flex;"><span>  CApath: /etc/ssl/certs
+</span></span><span style="display:flex;"><span>* TLSv1.3 <span style="color:#f92672">(</span>OUT<span style="color:#f92672">)</span>, TLS handshake, Client hello <span style="color:#f92672">(</span>1<span style="color:#f92672">)</span>:
+</span></span><span style="display:flex;"><span>* TLSv1.3 <span style="color:#f92672">(</span>IN<span style="color:#f92672">)</span>, TLS handshake, Server hello <span style="color:#f92672">(</span>2<span style="color:#f92672">)</span>:
+</span></span><span style="display:flex;"><span>* TLSv1.3 <span style="color:#f92672">(</span>IN<span style="color:#f92672">)</span>, TLS handshake, Encrypted Extensions <span style="color:#f92672">(</span>8<span style="color:#f92672">)</span>:
+</span></span><span style="display:flex;"><span>* TLSv1.3 <span style="color:#f92672">(</span>IN<span style="color:#f92672">)</span>, TLS handshake, Certificate <span style="color:#f92672">(</span>11<span style="color:#f92672">)</span>:
+</span></span><span style="display:flex;"><span>* TLSv1.3 <span style="color:#f92672">(</span>IN<span style="color:#f92672">)</span>, TLS handshake, CERT verify <span style="color:#f92672">(</span>15<span style="color:#f92672">)</span>:
+</span></span><span style="display:flex;"><span>* TLSv1.3 <span style="color:#f92672">(</span>IN<span style="color:#f92672">)</span>, TLS handshake, Finished <span style="color:#f92672">(</span>20<span style="color:#f92672">)</span>:
+</span></span><span style="display:flex;"><span>* TLSv1.3 <span style="color:#f92672">(</span>OUT<span style="color:#f92672">)</span>, TLS change cipher, Change cipher spec <span style="color:#f92672">(</span>1<span style="color:#f92672">)</span>:
+</span></span><span style="display:flex;"><span>* TLSv1.3 <span style="color:#f92672">(</span>OUT<span style="color:#f92672">)</span>, TLS handshake, Finished <span style="color:#f92672">(</span>20<span style="color:#f92672">)</span>:
+</span></span><span style="display:flex;"><span>* SSL connection using TLSv1.3 / TLS_AES_256_GCM_SHA384
+</span></span><span style="display:flex;"><span>* ALPN, server accepted to use h2
+</span></span><span style="display:flex;"><span>* Server certificate:
+</span></span><span style="display:flex;"><span>*  subject: O<span style="color:#f92672">=</span>Acme Co; CN<span style="color:#f92672">=</span>Kubernetes Ingress Controller Fake Certificate
+</span></span><span style="display:flex;"><span>*  start date: Oct <span style="color:#ae81ff">14</span> 14:28:07 <span style="color:#ae81ff">2022</span> GMT
+</span></span><span style="display:flex;"><span>*  expire date: Oct <span style="color:#ae81ff">14</span> 14:28:07 <span style="color:#ae81ff">2023</span> GMT
+</span></span><span style="display:flex;"><span>*  issuer: O<span style="color:#f92672">=</span>Acme Co; CN<span style="color:#f92672">=</span>Kubernetes Ingress Controller Fake Certificate
+</span></span><span style="display:flex;"><span>*  SSL certificate verify result: unable to get local issuer certificate <span style="color:#f92672">(</span>20<span style="color:#f92672">)</span>, continuing anyway.
+</span></span><span style="display:flex;"><span>* Using HTTP2, server supports multi-use
+</span></span><span style="display:flex;"><span>* Connection state changed <span style="color:#f92672">(</span>HTTP/2 confirmed<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>* Copying HTTP/2 data in stream buffer to connection buffer after upgrade: len<span style="color:#f92672">=</span><span style="color:#ae81ff">0</span>
+</span></span><span style="display:flex;"><span>* Using Stream ID: <span style="color:#ae81ff">1</span> <span style="color:#f92672">(</span>easy handle 0x560770fe78c0<span style="color:#f92672">)</span>
+</span></span><span style="display:flex;"><span>&gt; GET / HTTP/2
+</span></span><span style="display:flex;"><span>&gt; Host: lncblogdemo.westus3.cloudapp.azure.com
+</span></span><span style="display:flex;"><span>&gt; user-agent: curl/7.68.0
+</span></span><span style="display:flex;"><span>&gt; accept: */*
+</span></span><span style="display:flex;"><span>&gt;
+</span></span><span style="display:flex;"><span>* TLSv1.3 <span style="color:#f92672">(</span>IN<span style="color:#f92672">)</span>, TLS handshake, Newsession Ticket <span style="color:#f92672">(</span>4<span style="color:#f92672">)</span>:
+</span></span><span style="display:flex;"><span>* TLSv1.3 <span style="color:#f92672">(</span>IN<span style="color:#f92672">)</span>, TLS handshake, Newsession Ticket <span style="color:#f92672">(</span>4<span style="color:#f92672">)</span>:
+</span></span><span style="display:flex;"><span>* old SSL session ID is stale, removing
+</span></span><span style="display:flex;"><span>* Connection state changed <span style="color:#f92672">(</span>MAX_CONCURRENT_STREAMS <span style="color:#f92672">==</span> 128<span style="color:#f92672">)</span>!
+</span></span><span style="display:flex;"><span>&lt; HTTP/2 <span style="color:#ae81ff">200</span>
+</span></span><span style="display:flex;"><span>&lt; date: Fri, <span style="color:#ae81ff">14</span> Oct <span style="color:#ae81ff">2022</span> 15:57:29 GMT
+</span></span><span style="display:flex;"><span>&lt; content-type: text/plain; charset<span style="color:#f92672">=</span>utf-8
+</span></span><span style="display:flex;"><span>&lt; content-length: <span style="color:#ae81ff">7</span>
+</span></span><span style="display:flex;"><span>&lt; strict-transport-security: max-age<span style="color:#f92672">=</span>15724800; includeSubDomains
+</span></span><span style="display:flex;"><span>&lt;
+</span></span><span style="display:flex;"><span>* Connection <span style="color:#75715e">#0 to host lncblogdemo.westus3.cloudapp.azure.com left intact</span>
+</span></span><span style="display:flex;"><span>server1
+</span></span></code></pre></div><p>Notice the CN on the certificate:  <code>CN=Kubernetes Ingress Controller Fake Certificate</code></p>
+<p>And there you have it!  Three cool things you may not have known about the Web Application addon!</p>
+
+		</div>
+		<footer class="post__footer">
+			
+<div class="post__tags tags clearfix">
+	<svg class="tags__badge icon icon-tag" width="16" height="16" viewBox="0 0 32 32"><path d="M32 19c0 1-1 2-1 2L21 31s-1 1-2 1-2-1-2-1L2 16c-1-1-1.4-2-1.4-2S0 12.5 0 11V3C0 1.5.8.8.8.8S1.5 0 3 0h8c1.5 0 3 .6 3 .6S15 1 16 2l15 15s1 1 1 2zM7 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/></svg>
+	<ul class="tags__list">
+		<li class="tags__item">
+			<a class="tags__link btn" href="/tags/azure/" rel="tag">azure</a>
+		</li>
+		<li class="tags__item">
+			<a class="tags__link btn" href="/tags/aks/" rel="tag">aks</a>
+		</li>
+	</ul>
+</div>
+		</footer>
+	</article>
+</main>
+
+<div class="authorbox clearfix">
+	<figure class="authorbox__avatar">
+		<img alt="Larry Claman avatar" src="/img/avatar.png" class="avatar" height="90" width="90">
+	</figure>
+	<div class="authorbox__header">
+		<span class="authorbox__name">About Larry Claman</span>
+	</div>
+	<div class="authorbox__description">
+		I hack on the cloud at Microsoft
+	</div>
+</div>
+
+<nav class="pager flex">
+	<div class="pager__item pager__item--prev">
+		<a class="pager__link" href="/post/2022-03-05-22-nplus1/" rel="prev">
+			<span class="pager__subtitle">«&thinsp;Previous</span>
+			<p class="pager__title">Kubernetes Cluster Autoscaler n&#43;1 nodes</p>
+		</a>
+	</div>
+</nav>
+
+
+  <script src="https://giscus.app/client.js"
+  data-repo="larryclaman/larryclaman.github.io"
+  data-repo-id="MDEwOlJlcG9zaXRvcnkyMjA4ODU2NDE="
+  data-category="Announcements"
+  data-category-id="DIC_kwDODSpyic4CABA6"
+  data-mapping="title"
+  data-reactions-enabled="1"
+  data-emit-metadata="0"
+  data-theme="light"
+  data-lang="en"
+  crossorigin="anonymous"
+  async
+  defer>
+</script>
+
+
+
+
+
+
+			</div>
+			<aside class="sidebar">
+<div class="widget-recent widget">
+	<h4 class="widget__title">Recent Posts</h4>
+	<div class="widget__content">
+		<ul class="widget__list">
+			<li class="widget__item"><a class="widget__link" href="/post/2022-10-14-aks-web-application/">Exploring AKS Web Application Routing Addon</a></li>
+			<li class="widget__item"><a class="widget__link" href="/post/2022-03-05-22-nplus1/">Kubernetes Cluster Autoscaler n&#43;1 nodes</a></li>
+			<li class="widget__item"><a class="widget__link" href="/post/2021-11-19-21-keda2/">Kubernetes &amp; long running batch Jobs</a></li>
+			<li class="widget__item"><a class="widget__link" href="/post/2021-11-14-21-keda/">KEDA, Windows, and Batch Jobs</a></li>
+			<li class="widget__item"><a class="widget__link" href="/post/2021-08-19-21-bicep-uami/">Azure Bicep &amp; User Assigned Managed Identity</a></li>
+		</ul>
+	</div>
+</div>
+<div class="widget-taglist widget">
+	<h4 class="widget__title">Tags</h4>
+	<div class="widget__content">
+		<a class="widget-taglist__link widget__link btn" href="/tags/aks/" title="aks">aks</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/azure/" title="azure">azure</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/azure-devops/" title="azure-devops">azure-devops</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/bicep/" title="bicep">bicep</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/docker/" title="docker">docker</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/github/" title="github">github</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/identity/" title="identity">identity</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/keda/" title="keda">keda</a>
+		<a class="widget-taglist__link widget__link btn" href="/tags/kubernetes/" title="kubernetes">kubernetes</a>
+	</div>
+</div>
+</aside>
+		</div>
+		<footer class="footer">
+	<div class="container footer__container flex">
+		
+		<div class="footer__copyright">
+			&copy; 2022 Larry Claman&#39;s Blog.
+			<span class="footer__copyright-credits">Generated with <a href="https://gohugo.io/" rel="nofollow noopener" target="_blank">Hugo</a> and <a href="https://github.com/Vimux/Mainroad/" rel="nofollow noopener" target="_blank">Mainroad</a> theme.</span>
+		</div>
+	</div>
+</footer>
+	</div>
+<script async defer src="/js/menu.js"></script>
+</body>
+</html>

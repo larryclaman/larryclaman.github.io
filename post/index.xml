@@ -6,7 +6,16 @@
     <description>Recent content in Posts on Larry Claman&#39;s Blog</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>en-us</language>
-    <lastBuildDate>Mon, 07 Mar 2022 00:00:00 +0000</lastBuildDate><atom:link href="https://larryclaman.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    <lastBuildDate>Fri, 14 Oct 2022 00:00:00 +0000</lastBuildDate><atom:link href="https://larryclaman.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Exploring AKS Web Application Routing Addon</title>
+      <link>https://larryclaman.github.io/post/2022-10-14-aks-web-application/</link>
+      <pubDate>Fri, 14 Oct 2022 00:00:00 +0000</pubDate>
+      
+      <guid>https://larryclaman.github.io/post/2022-10-14-aks-web-application/</guid>
+      <description>A simplified intro to the new AKS Web Application Routing feature</description>
+    </item>
+    
     <item>
       <title>Kubernetes Cluster Autoscaler n&#43;1 nodes</title>
       <link>https://larryclaman.github.io/post/2022-03-05-22-nplus1/</link>
